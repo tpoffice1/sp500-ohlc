@@ -1,0 +1,38 @@
+name: Build S&P500 OHLC JSON
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 3 * * *'  # 03:30 UTC (10:30 PM America/Chicago)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install -r requirements.txt
+
+      - name: Refresh S&P 500 tickers from Wikipedia
+        run: python update_tickers.py
+
+      - name: Build yesterday's JSON
+        run: python fetch_ohlc.py
+
+      - name: Commit & push JSON + tickers + manifest
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add docs/*.json tickers.txt
+            git add docs/index.json
+            git commit -m "Daily: tickers refresh + OHLC JSON + manifest"
+            git push
+          else
+            echo "No changes."
