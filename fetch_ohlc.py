@@ -1,13 +1,14 @@
 import os, sys, json, io, zipfile, time, requests, pandas as pd
 from datetime import datetime, timedelta, timezone
 
-# Stooq mirrors for the daily US ZIP. Sometimes .com 404s; .pl or http works.
+# Mirrors for the daily US ZIP. We'll SKIP these on manual runs (fast feedback).
 ZIP_URLS = [
     "http://stooq.com/db/h/d_us_txt.zip",
     "https://stooq.pl/db/h/d_us_txt.zip",
     "https://stooq.com/db/h/d_us_txt.zip",
 ]
-# Per-symbol CSV fallback
+
+# Per-symbol CSV fallback (reliable)
 CSV_TPL = "https://stooq.com/q/d/l/?s={sym}&i=d"
 UA_HDRS = {"User-Agent": "Mozilla/5.0 (GitHub Actions bot)"}
 
@@ -25,26 +26,29 @@ def most_recent_weekday_iso():
     return d.strftime("%Y-%m-%d")
 
 def fetch_zip_with_retries():
+    # Manual runs can force-skip ZIP for speed
+    if os.environ.get("SKIP_ZIP") == "1":
+        print("[zip] SKIP_ZIP=1 -> skipping ZIP probes")
+        return None
     for url in ZIP_URLS:
-        for attempt in range(2):
-            try:
-                r = requests.get(url, headers=UA_HDRS, timeout=60)
-                if r.status_code == 200 and r.content:
-                    print(f"[zip] using {url}")
-                    return io.BytesIO(r.content)
-                time.sleep(1 + attempt)
-            except requests.RequestException:
-                time.sleep(1 + attempt)
-    print("[zip] all mirrors failed, falling back to per-symbol CSV")
+        try:
+            r = requests.get(url, headers=UA_HDRS, timeout=10)  # short timeout
+            if r.status_code == 200 and r.content:
+                print(f"[zip] using {url}")
+                return io.BytesIO(r.content)
+        except requests.RequestException:
+            pass
+    print("[zip] mirrors failed quickly, falling back to per-symbol CSV")
     return None
 
 def parse_from_zip(zf: zipfile.ZipFile, stooq_symbol: str, target_date: str):
-    # ZIP files use capitalized headers and per-symbol txt paths
+    # ZIP files have capitalized headers; this path is fast if ZIP is available.
     path = f"data/daily/us/{stooq_symbol[0]}/{stooq_symbol}.txt"
     try:
         with zf.open(path) as f:
             df = pd.read_csv(
-                f, header=0,
+                f,
+                header=0,
                 names=["Date","Open","High","Low","Close","Volume"],
                 dtype={"Date": "string"}
             )
@@ -53,14 +57,12 @@ def parse_from_zip(zf: zipfile.ZipFile, stooq_symbol: str, target_date: str):
             return None
         r = row.iloc[0]
         return {
-            "date": target_date,
-            "open": float(r["Open"]),
-            "high": float(r["High"]),
-            "low":  float(r["Low"]),
-            "close":float(r["Close"]),
+            "date":  target_date,
+            "open":  float(r["Open"]),
+            "high":  float(r["High"]),
+            "low":   float(r["Low"]),
+            "close": float(r["Close"]),
         }
-    except KeyError:
-        return None
     except Exception:
         return None
 
@@ -71,7 +73,7 @@ def fetch_symbol_csv(stooq_symbol: str, target_date: str):
     """
     url = CSV_TPL.format(sym=stooq_symbol)
     try:
-        r = requests.get(url, headers=UA_HDRS, timeout=30)
+        r = requests.get(url, headers=UA_HDRS, timeout=8)  # short timeout
         r.raise_for_status()
     except requests.RequestException:
         return None
@@ -84,16 +86,13 @@ def fetch_symbol_csv(stooq_symbol: str, target_date: str):
     if df.empty or df.columns.size == 0:
         return None
 
-    # Normalize headers to lowercase and strip whitespace/BOM
+    # Normalize headers to lowercase
     df.columns = [str(c).strip().lower() for c in df.columns]
-    # We only proceed if the expected columns exist
-    if "date" not in df.columns:
-        return None
-    for col in ("open","high","low","close"):
+    # Ensure required columns exist
+    for col in ("date", "open", "high", "low", "close"):
         if col not in df.columns:
             return None
 
-    # Date compare as string to match ISO target_date
     try:
         df["date"] = df["date"].astype(str)
     except Exception:
@@ -119,7 +118,7 @@ def main():
     target_date = sys.argv[1] if len(sys.argv) > 1 else most_recent_weekday_iso()
     tickers = load_tickers()
 
-    # Manual-run speedup: limit number of tickers with env var
+    # Manual-run speedup: limit number of tickers
     limit = os.environ.get("LIMIT_TICKERS")
     if limit:
         try:
@@ -128,6 +127,8 @@ def main():
             print(f"[limit] processing first {n} tickers for this run")
         except ValueError:
             pass
+
+    print("[sanity] CSV parser expects lowercase 'date/open/high/low/close'")
     print(f"[info] total tickers this run: {len(tickers)}")
 
     rows = []
@@ -148,7 +149,7 @@ def main():
                 rows.append(rec)
             if i % 50 == 0:
                 print(f"[zip] {i}/{len(tickers)} processed…")
-    else:   # CSV fallback (slower)
+    else:   # CSV fallback (slower but robust)
         for i, t in enumerate(tickers, 1):
             sym = to_stooq_symbol(t)
             rec = fetch_symbol_csv(sym, target_date)
@@ -166,7 +167,6 @@ def main():
     with open("docs/latest.json", "w", encoding="utf-8") as f:
         json.dump({"redirect": f"{target_date}.json"}, f)
 
-    # Maintain manifest of available dates
     idx_path = "docs/index.json"
     try:
         manifest = json.load(open(idx_path, "r", encoding="utf-8")) if os.path.exists(idx_path) else {"dates": []}

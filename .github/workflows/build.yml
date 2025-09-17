@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       limit_tickers:
-        description: 'Limit number of tickers for manual test runs'
+        description: 'Limit number of tickers (manual test)'
         required: false
-        default: '25'
+        default: '10'
+      skip_zip:
+        description: 'Skip ZIP (force CSV) for fast feedback'
+        required: false
+        default: 'true'
   schedule:
     - cron: '30 3 * * *'  # nightly full run
 
@@ -17,6 +21,7 @@ jobs:
       contents: write
     env:
       LIMIT_TICKERS: ${{ github.event.inputs.limit_tickers }}
+      SKIP_ZIP: ${{ github.event.inputs.skip_zip == 'true' && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +50,6 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -m "Daily: tickers refresh + OHLC JSON + manifest"
             git push
-          else:
+          else
             echo "No changes to commit."
           fi
