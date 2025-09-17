@@ -1,0 +1,5 @@
+BRK.B	empty dataframe
+      Date  Open  High   Low  Close    Volume Symbol
+2012-05-18 42.05 45.00 38.00  38.23 580438450   META
+2012-05-21 36.53 36.66 33.00  34.03 169418988   META
+2012-05-22 32.61 33.59 30.94  31.00 101876406   META
