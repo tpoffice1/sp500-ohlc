@@ -2,14 +2,21 @@ name: Build S&P500 OHLC JSON
 
 on:
   workflow_dispatch:
+    inputs:
+      limit_tickers:
+        description: 'Limit number of tickers for manual test runs'
+        required: false
+        default: '25'
   schedule:
-    - cron: '30 3 * * *'  # 03:30 UTC (10:30 PM America/Chicago)
+    - cron: '30 3 * * *'  # nightly full run
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      LIMIT_TICKERS: ${{ github.event.inputs.limit_tickers }}
     steps:
       - uses: actions/checkout@v4
 
@@ -17,7 +24,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Make sure wheels resolve cleanly
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
@@ -29,20 +35,16 @@ jobs:
       - name: Build yesterday's JSON
         run: python fetch_ohlc.py
 
-      # Be tolerant if no files were produced (e.g., a transient network hiccup)
       - name: Commit & push JSON + tickers + manifest
         run: |
-          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           mkdir -p docs
-          # Stage whatever exists (won't error if no match)
           git add -A docs || true
           git add tickers.txt || true
-          # Only commit if there are staged changes
           if ! git diff --cached --quiet; then
             git commit -m "Daily: tickers refresh + OHLC JSON + manifest"
             git push
-          else
+          else:
             echo "No changes to commit."
           fi
