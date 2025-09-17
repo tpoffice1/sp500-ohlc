@@ -2,15 +2,21 @@ name: build
 
 on:
   schedule:
-    - cron: "15 23 * * 1-5"   # weekdays ~ 6:15pm CT
+    # Weekdays ~6:15pm Central (adjust if you like)
+    - cron: "15 23 * * 1-5"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,10 +29,17 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
 
+      - name: Show repo layout
+        run: |
+          pwd
+          ls -la
+          echo "--- first 3 levels ---"
+          find . -maxdepth 3 -type f | sort
+
       - name: Build yesterday's JSON
         timeout-minutes: 15
         run: |
-          python sp500_ohlc/fetch_ohlc.py
+          python fetch_ohlc.py
 
       - name: Upload bad tickers (if any)
         if: always()
@@ -36,11 +49,11 @@ jobs:
           path: build/bad_tickers.txt
           if-no-files-found: ignore
 
-      - name: Commit & push JSON + tickers + manifest
+      - name: Commit & push outputs
         if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/latest.csv data/yesterday.json data/raw/*.csv tickers.txt || true
+          git add -A
           git commit -m "build: update aggregates and yesterday.json" || echo "nothing to commit"
           git push
