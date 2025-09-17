@@ -1,165 +1,174 @@
-import os, sys, json, io, zipfile, time, requests, pandas as pd
+import os, io, json, time, csv, sys, re
 from datetime import datetime, timedelta, timezone
+from typing import List, Dict, Tuple
+import requests
+import pandas as pd
 
-ZIP_URLS = [
-    "http://stooq.com/db/h/d_us_txt.zip",
-    "https://stooq.pl/db/h/d_us_txt.zip",
-    "https://stooq.com/db/h/d_us_txt.zip",
-]
-CSV_TPL = "https://stooq.com/q/d/l/?s={sym}&i=d"
-UA_HDRS = {"User-Agent": "Mozilla/5.0 (GitHub Actions bot)"}
+REQUIRED = ["Date", "Open", "High", "Low", "Close", "Volume"]
+RAW_DIR = "data/raw"
+OUT_LATEST = "data/latest.csv"
+OUT_YDAY_JSON = "data/yesterday.json"
+BAD_TICKERS = "build/bad_tickers.txt"
+TICKERS_TXT = "tickers.txt"
 
-def to_stooq_symbol(ticker: str) -> str:
-    return f"{ticker.strip().lower().replace('.', '-')}.us"
+SOURCE_URL_TPL = "https://example.datasource/{sym}.csv"  # replace with your real endpoint
 
-def load_tickers(path="tickers.txt"):
-    with open(path, "r", encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip()]
+def ensure_dirs():
+    os.makedirs(RAW_DIR, exist_ok=True)
+    os.makedirs("build", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
 
-def most_recent_weekday_iso():
-    d = datetime.now(timezone.utc) - timedelta(days=1)
-    while d.weekday() >= 5:
-        d -= timedelta(days=1)
-    return d.strftime("%Y-%m-%d")
+def session_with_retry() -> requests.Session:
+    s = requests.Session()
+    s.headers.update({"User-Agent": "sp500-ohlc/1.0"})
+    return s
 
-def fetch_zip_with_retries():
-    if os.environ.get("SKIP_ZIP") == "1":
-        print("[zip] SKIP_ZIP=1 -> skipping ZIP probes")
-        return None
-    for url in ZIP_URLS:
+def normalize_headers(df: pd.DataFrame) -> pd.DataFrame:
+    lower = {c: re.sub(r"\s+", "", str(c)).lower() for c in df.columns}
+    df = df.rename(columns=lower)
+    # map variants to canonical names
+    mapping = {
+        "date": "Date", "timestamp": "Date",
+        "open": "Open", "high": "High", "low": "Low",
+        "close": "Close", "adjclose": "Close", "adj_close": "Close",
+        "volume": "Volume", "vol": "Volume"
+    }
+    # only rename if present
+    for k, v in mapping.items():
+        if k in df.columns:
+            df = df.rename(columns={k: v})
+    return df
+
+def validate_df(df: pd.DataFrame, sym: str) -> Tuple[bool, str]:
+    missing = [c for c in REQUIRED if c not in df.columns]
+    if missing:
+        return False, f"missing columns: {missing}"
+    if df.empty:
+        return False, "empty dataframe"
+    return True, ""
+
+def fetch_one(s: requests.Session, sym: str) -> pd.DataFrame:
+    url = SOURCE_URL_TPL.format(sym=sym)
+    for attempt in range(3):
         try:
-            r = requests.get(url, headers=UA_HDRS, timeout=10)
-            if r.status_code == 200 and r.content:
-                print(f"[zip] using {url}")
-                return io.BytesIO(r.content)
-        except requests.RequestException:
-            pass
-    print("[zip] mirrors failed quickly, falling back to per-symbol CSV")
-    return None
+            r = s.get(url, timeout=5)
+            if r.status_code != 200:
+                raise RuntimeError(f"http {r.status_code}")
+            text = r.text.strip()
+            if text.startswith("<!DOCTYPE") or text.lower().startswith("<html"):
+                raise RuntimeError("html response")
+            df = pd.read_csv(io.StringIO(text))
+            df = normalize_headers(df)
+            # parse Date if present under canonical name after normalize
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"], errors="coerce", utc=False)
+                df = df.dropna(subset=["Date"]).sort_values("Date")
+            return df
+        except Exception as e:
+            if attempt == 2:
+                raise
+            time.sleep(1 + attempt)
+    raise RuntimeError("unreachable")
 
-def parse_from_zip(zf: zipfile.ZipFile, stooq_symbol: str, target_date: str):
-    path = f"data/daily/us/{stooq_symbol[0]}/{stooq_symbol}.txt"
-    try:
-        with zf.open(path) as f:
-            df = pd.read_csv(
-                f,
-                header=0,
-                names=["Date","Open","High","Low","Close","Volume"],
-                dtype={"Date": "string"}
-            )
-        row = df[df["Date"] == target_date]
-        if row.empty:
-            return None
-        r = row.iloc[0]
-        return {
-            "date":  target_date,
-            "open":  float(r["Open"]),
-            "high":  float(r["High"]),
-            "low":   float(r["Low"]),
-            "close": float(r["Close"]),
-        }
-    except Exception:
-        return None
+def last_trading_day(dt: datetime) -> datetime:
+    # naive weekend logic; replace with an exchange calendar if needed
+    d = dt.date()
+    # step back from today (exclude today’s incomplete data)
+    d = d - timedelta(days=1)
+    while d.weekday() >= 5:  # 5=Sat, 6=Sun
+        d -= timedelta(days=1)
+    return datetime(d.year, d.month, d.day)
 
-def fetch_symbol_csv(stooq_symbol: str, target_date: str):
-    url = CSV_TPL.format(sym=stooq_symbol)
-    try:
-        r = requests.get(url, headers=UA_HDRS, timeout=8)
-        r.raise_for_status()
-    except requests.RequestException:
-        return None
-    try:
-        df = pd.read_csv(io.StringIO(r.text))
-    except Exception:
-        return None
-    if df.empty or df.columns.size == 0:
-        return None
-    df.columns = [str(c).strip().lower() for c in df.columns]
-    for col in ("date","open","high","low","close"):
-        if col not in df.columns:
-            return None
-    try:
-        df["date"] = df["date"].astype(str)
-    except Exception:
-        return None
-    row = df[df["date"] == target_date]
-    if row.empty:
-        return None
-    r0 = row.iloc[0]
-    try:
-        return {
-            "date":  target_date,
-            "open":  float(r0["open"]),
-            "high":  float(r0["high"]),
-            "low":   float(r0["low"]),
-            "close": float(r0["close"]),
-        }
-    except Exception:
-        return None
+def write_bad(sym: str, reason: str, head_preview: str = ""):
+    with open(BAD_TICKERS, "a", encoding="utf-8") as f:
+        f.write(f"{sym}\t{reason}\n")
+        if head_preview:
+            f.write(head_preview + "\n")
 
 def main():
-    target_date = sys.argv[1] if len(sys.argv) > 1 else most_recent_weekday_iso()
-    tickers = load_tickers()
+    ensure_dirs()
 
-    limit = os.environ.get("LIMIT_TICKERS")
-    if limit:
+    # load tickers (one per line)
+    if not os.path.exists(TICKERS_TXT):
+        print(f"{TICKERS_TXT} not found", file=sys.stderr)
+        sys.exit(1)
+    with open(TICKERS_TXT, "r", encoding="utf-8") as f:
+        tickers = [t.strip().upper() for t in f if t.strip()]
+
+    s = session_with_retry()
+    frames = []
+    processed = []
+
+    # clean previous bad list
+    if os.path.exists(BAD_TICKERS):
+        os.remove(BAD_TICKERS)
+
+    for sym in tickers:
         try:
-            n = max(1, int(limit))
-            tickers = tickers[:n]
-            print(f"[limit] processing first {n} tickers for this run")
-        except ValueError:
-            pass
+            df = fetch_one(s, sym)
+            ok, why = validate_df(df, sym)
+            if not ok:
+                preview = df.head(3).to_string(index=False) if not df.empty else ""
+                write_bad(sym, why, preview)
+                continue
 
-    print("[sanity] CSV parser expects lowercase 'date/open/high/low/close'")
-    print(f"[info] total tickers this run: {len(tickers)}")
+            # keep only canonical columns, in order
+            df = df[REQUIRED].copy()
+            # store raw
+            raw_path = os.path.join(RAW_DIR, f"{sym}.csv")
+            df.to_csv(raw_path, index=False)
+            # tag with ticker for aggregate
+            df["Symbol"] = sym
+            frames.append(df)
+            processed.append(sym)
 
-    rows = []
-    zf = None
-    zbuf = fetch_zip_with_retries()
-    if zbuf:
-        try:
-            zf = zipfile.ZipFile(zbuf)
-        except zipfile.BadZipFile:
-            zf = None
+        except Exception as e:
+            err = str(e)
+            preview = ""
+            try:
+                preview = df.head(3).to_string(index=False)  # may not exist
+            except Exception:
+                pass
+            write_bad(sym, f"exception: {err}", preview)
+            continue
 
-    if zf:
-        for i, t in enumerate(tickers, 1):
-            sym = to_stooq_symbol(t)
-            rec = parse_from_zip(zf, sym, target_date)
-            if rec:
-                rec["ticker"] = t
-                rows.append(rec)
-            if i % 50 == 0:
-                print(f"[zip] {i}/{len(tickers)} processed…")
-    else:
-        for i, t in enumerate(tickers, 1):
-            sym = to_stooq_symbol(t)
-            rec = fetch_symbol_csv(sym, target_date)
-            if rec:
-                rec["ticker"] = t
-                rows.append(rec)
-            if i % 25 == 0:
-                print(f"[csv] {i}/{len(tickers)} processed…")
+    if not frames:
+        print("No valid ticker data; see build/bad_tickers.txt", file=sys.stderr)
+        sys.exit(1)
 
-    os.makedirs("docs", exist_ok=True)
-    out_path = f"docs/{target_date}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"date": target_date, "count": len(rows), "rows": rows}, f, ensure_ascii=False)
+    all_df = pd.concat(frames, ignore_index=True)
+    all_df = all_df.sort_values(["Date", "Symbol"])
+    all_df.to_csv(OUT_LATEST, index=False)
 
-    with open("docs/latest.json", "w", encoding="utf-8") as f:
-        json.dump({"redirect": f"{target_date}.json"}, f)
+    yday = last_trading_day(datetime.now())
+    ymask = all_df["Date"].dt.date == yday.date()
+    ydf = all_df.loc[ymask, ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"]].copy()
 
-    idx_path = "docs/index.json"
-    try:
-        manifest = json.load(open(idx_path, "r", encoding="utf-8")) if os.path.exists(idx_path) else {"dates": []}
-    except Exception:
-        manifest = {"dates": []}
-    dates = set(manifest.get("dates", []))
-    dates.add(target_date)
-    with open(idx_path, "w", encoding="utf-8") as f:
-        json.dump({"dates": sorted(dates)}, f)
+    # serialize Date to ISO string for JSON
+    ydf["Date"] = ydf["Date"].dt.strftime("%Y-%m-%d")
+    records = [
+        {
+            "Symbol": r["Symbol"],
+            "Date": r["Date"],
+            "Open": float(r["Open"]),
+            "High": float(r["High"]),
+            "Low": float(r["Low"]),
+            "Close": float(r["Close"]),
+            "Volume": int(r["Volume"]),
+        }
+        for _, r in ydf.iterrows()
+    ]
+    with open(OUT_YDAY_JSON, "w", encoding="utf-8") as f:
+        json.dump(records, f, indent=2)
 
-    print(f"[done] wrote {out_path} with {len(rows)} rows")
+    # rewrite tickers.txt to reflect processed list (optional)
+    with open(TICKERS_TXT, "w", encoding="utf-8") as f:
+        f.write("\n".join(processed) + "\n")
+
+    print(f"Wrote {len(processed)} tickers; {len(frames)} dataframes; "
+          f"latest -> {OUT_LATEST}, yesterday -> {OUT_YDAY_JSON}")
+    if os.path.exists(BAD_TICKERS):
+        print(f"See {BAD_TICKERS} for skipped tickers.")
 
 if __name__ == "__main__":
     main()
