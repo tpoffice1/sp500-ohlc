@@ -1,14 +1,11 @@
 import os, sys, json, io, zipfile, time, requests, pandas as pd
 from datetime import datetime, timedelta, timezone
 
-# Mirrors for the daily US ZIP. We'll SKIP these on manual runs (fast feedback).
 ZIP_URLS = [
     "http://stooq.com/db/h/d_us_txt.zip",
     "https://stooq.pl/db/h/d_us_txt.zip",
     "https://stooq.com/db/h/d_us_txt.zip",
 ]
-
-# Per-symbol CSV fallback (reliable)
 CSV_TPL = "https://stooq.com/q/d/l/?s={sym}&i=d"
 UA_HDRS = {"User-Agent": "Mozilla/5.0 (GitHub Actions bot)"}
 
@@ -26,13 +23,12 @@ def most_recent_weekday_iso():
     return d.strftime("%Y-%m-%d")
 
 def fetch_zip_with_retries():
-    # Manual runs can force-skip ZIP for speed
     if os.environ.get("SKIP_ZIP") == "1":
         print("[zip] SKIP_ZIP=1 -> skipping ZIP probes")
         return None
     for url in ZIP_URLS:
         try:
-            r = requests.get(url, headers=UA_HDRS, timeout=10)  # short timeout
+            r = requests.get(url, headers=UA_HDRS, timeout=10)
             if r.status_code == 200 and r.content:
                 print(f"[zip] using {url}")
                 return io.BytesIO(r.content)
@@ -42,7 +38,6 @@ def fetch_zip_with_retries():
     return None
 
 def parse_from_zip(zf: zipfile.ZipFile, stooq_symbol: str, target_date: str):
-    # ZIP files have capitalized headers; this path is fast if ZIP is available.
     path = f"data/daily/us/{stooq_symbol[0]}/{stooq_symbol}.txt"
     try:
         with zf.open(path) as f:
@@ -67,41 +62,29 @@ def parse_from_zip(zf: zipfile.ZipFile, stooq_symbol: str, target_date: str):
         return None
 
 def fetch_symbol_csv(stooq_symbol: str, target_date: str):
-    """
-    Download per-symbol CSV and safely extract OHLC for target_date.
-    Handles odd/missing headers and empty responses by returning None.
-    """
     url = CSV_TPL.format(sym=stooq_symbol)
     try:
-        r = requests.get(url, headers=UA_HDRS, timeout=8)  # short timeout
+        r = requests.get(url, headers=UA_HDRS, timeout=8)
         r.raise_for_status()
     except requests.RequestException:
         return None
-
-    # Parse defensively
     try:
         df = pd.read_csv(io.StringIO(r.text))
     except Exception:
         return None
     if df.empty or df.columns.size == 0:
         return None
-
-    # Normalize headers to lowercase
     df.columns = [str(c).strip().lower() for c in df.columns]
-    # Ensure required columns exist
-    for col in ("date", "open", "high", "low", "close"):
+    for col in ("date","open","high","low","close"):
         if col not in df.columns:
             return None
-
     try:
         df["date"] = df["date"].astype(str)
     except Exception:
         return None
-
     row = df[df["date"] == target_date]
     if row.empty:
         return None
-
     r0 = row.iloc[0]
     try:
         return {
@@ -118,7 +101,6 @@ def main():
     target_date = sys.argv[1] if len(sys.argv) > 1 else most_recent_weekday_iso()
     tickers = load_tickers()
 
-    # Manual-run speedup: limit number of tickers
     limit = os.environ.get("LIMIT_TICKERS")
     if limit:
         try:
@@ -140,7 +122,7 @@ def main():
         except zipfile.BadZipFile:
             zf = None
 
-    if zf:  # ZIP path (fast)
+    if zf:
         for i, t in enumerate(tickers, 1):
             sym = to_stooq_symbol(t)
             rec = parse_from_zip(zf, sym, target_date)
@@ -149,7 +131,7 @@ def main():
                 rows.append(rec)
             if i % 50 == 0:
                 print(f"[zip] {i}/{len(tickers)} processed…")
-    else:   # CSV fallback (slower but robust)
+    else:
         for i, t in enumerate(tickers, 1):
             sym = to_stooq_symbol(t)
             rec = fetch_symbol_csv(sym, target_date)

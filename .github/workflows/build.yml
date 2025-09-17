@@ -12,7 +12,7 @@ on:
         required: false
         default: 'true'
   schedule:
-    - cron: '30 3 * * *'  # nightly full run
+    - cron: '30 3 * * *'
 
 jobs:
   build:
@@ -36,6 +36,11 @@ jobs:
 
       - name: Refresh S&P 500 tickers from Wikipedia
         run: python update_tickers.py
+
+      - name: Show fetch_ohlc.py header (debug)
+        run: |
+          echo "==== head(fetch_ohlc.py) ===="
+          sed -n '1,80p' fetch_ohlc.py
 
       - name: Build yesterday's JSON
         run: python fetch_ohlc.py
