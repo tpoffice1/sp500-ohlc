@@ -2,46 +2,16 @@ name: Build yesterday's JSON
 
 on:
   workflow_dispatch:
-  schedule:
-    # run Mon–Sat at 02:40 UTC (adjust to your preference)
-    - cron: "40 2 * * 1-6"
-  push:
-    paths:
-      - fetch_ohlc.py
-      - tickers.txt
-      - .github/workflows/build.yml
-      - requirements.txt
 
 permissions:
   contents: write
 
-concurrency:
-  group: build-yesterday-json
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Count tickers
-        run: |
-          echo "tickers.txt line count:"
-          wc -l tickers.txt || true
-          echo "first 20:"
-          head -n 20 tickers.txt || true
-
-      - name: Show repo layout
-        run: |
-          pwd
-          ls -la
-          echo '--- first 3 levels ---'
-          find . -maxdepth 3 -type f | sort | sed -e 's|^\./||'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,93 +23,48 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Build yesterday's JSON (try 1)
+      - name: Ensure tickers.txt (create/fix if < 400)
+        run: |
+          python - <<'PY'
+          import pathlib
+          import yfinance as yf
+
+          p = pathlib.Path("tickers.txt")
+          if p.exists():
+              lines = [l.strip().upper() for l in p.read_text().splitlines()
+                       if l.strip() and not l.strip().startswith("#")]
+          else:
+              lines = []
+
+          if len(lines) < 400:
+              tickers = [t.upper() for t in yf.tickers_sp500()]
+              p.write_text("\n".join(tickers) + "\n", encoding="utf-8")
+              print(f"WROTE {len(tickers)} tickers to tickers.txt")
+          else:
+              print(f"FOUND {len(lines)} tickers in tickers.txt")
+          PY
+
+      - name: Guard >= 400 tickers
+        run: |
+          n=$(grep -v '^\s*#' tickers.txt | sed '/^\s*$/d' | wc -l)
+          echo "count=$n"
+          if [ "$n" -lt 400 ]; then
+            echo "::error::tickers.txt has only $n symbols; need >= 400"
+            exit 1
+          fi
+
+      - name: Build data
         run: python fetch_ohlc.py
 
-      - name: Sanity check (try 1)
-        id: sanity1
-        run: |
-          python - <<'PY'
-          import json, os
-          p = 'data/yesterday.json'
-          rows = 0
-          try:
-              with open(p) as f:
-                  d = json.load(f)
-              if isinstance(d, list): rows = len(d)
-              elif isinstance(d, dict) and isinstance(d.get('rows'), list): rows = len(d['rows'])
-              elif isinstance(d, dict): rows = len(d.keys())
-          except Exception as e:
-              pass
-          ok = rows >= 400
-          print(f"rows={rows}")
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as g:
-              g.write(f"rows={rows}\n")
-              g.write(f"ok={'true' if ok else 'false'}\n")
-          PY
-
-      - name: Retry build after wait (try 2)
-        if: steps.sanity1.outputs.ok != 'true'
-        run: |
-          echo "First build incomplete (rows=${{ steps.sanity1.outputs.rows }}). Waiting 90s and retrying…"
-          sleep 90
-          python fetch_ohlc.py
-
-      - name: Sanity check (try 2)
-        if: steps.sanity1.outputs.ok != 'true'
-        id: sanity2
-        run: |
-          python - <<'PY'
-          import json, os
-          p = 'data/yesterday.json'
-          rows = 0
-          try:
-              with open(p) as f:
-                  d = json.load(f)
-              if isinstance(d, list): rows = len(d)
-              elif isinstance(d, dict) and isinstance(d.get('rows'), list): rows = len(d['rows'])
-              elif isinstance(d, dict): rows = len(d.keys())
-          except Exception as e:
-              pass
-          ok = rows >= 400
-          print(f"rows={rows}")
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as g:
-              g.write(f"rows={rows}\n")
-              g.write(f"ok={'true' if ok else 'false'}\n")
-          PY
-
-      - name: Fail if still incomplete
-        if: steps.sanity1.outputs.ok != 'true' && steps.sanity2.outputs.ok != 'true'
-        run: |
-          echo "::error::Upstream incomplete after retry. rows=${{ steps.sanity2.outputs.rows }}"
-          exit 1
-
-      - name: Upload bad tickers (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bad_tickers
-          path: build/bad_tickers.txt
-          if-no-files-found: ignore
-          retention-days: 3
-
-      - name: Commit & push outputs (only if complete)
-        if: steps.sanity1.outputs.ok == 'true' || steps.sanity2.outputs.ok == 'true'
+      - name: Commit outputs (if any)
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-
-          git commit -m "build: update aggregates and yesterday.json"
-
-          # Avoid non-fast-forward errors
-          git fetch origin main
-          git pull --rebase origin main
-
+          git commit -m "build: update data"
+          git pull --rebase origin main || true
           git push origin HEAD:main
-
