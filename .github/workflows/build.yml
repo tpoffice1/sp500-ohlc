@@ -1,45 +1,111 @@
-name: build
+name: Build yesterday's JSON
 
 on:
-  schedule:
-    # Weekdays ~6:15pm Central (adjust if you like)
-    - cron: "15 23 * * 1-5"
   workflow_dispatch:
+  schedule:
+    # run Mon–Sat at 02:40 UTC (adjust to your preference)
+    - cron: "40 2 * * 1-6"
+  push:
+    paths:
+      - fetch_ohlc.py
+      - tickers.txt
+      - .github/workflows/build.yml
+      - requirements.txt
 
 permissions:
   contents: write
 
+concurrency:
+  group: build-yesterday-json
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install deps
-        run: |
-          python -m pip install -U pip
-          pip install -r requirements.txt
+          fetch-depth: 0
 
       - name: Show repo layout
         run: |
           pwd
           ls -la
-          echo "--- first 3 levels ---"
-          find . -maxdepth 3 -type f | sort
+          echo '--- first 3 levels ---'
+          find . -maxdepth 3 -type f | sort | sed -e 's|^\./||'
 
-      - name: Build yesterday's JSON
-        timeout-minutes: 15
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
         run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Build yesterday's JSON (try 1)
+        run: python fetch_ohlc.py
+
+      - name: Sanity check (try 1)
+        id: sanity1
+        run: |
+          python - <<'PY'
+          import json, os
+          p = 'data/yesterday.json'
+          rows = 0
+          try:
+              with open(p) as f:
+                  d = json.load(f)
+              if isinstance(d, list): rows = len(d)
+              elif isinstance(d, dict) and isinstance(d.get('rows'), list): rows = len(d['rows'])
+              elif isinstance(d, dict): rows = len(d.keys())
+          except Exception as e:
+              pass
+          ok = rows >= 400
+          print(f"rows={rows}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as g:
+              g.write(f"rows={rows}\n")
+              g.write(f"ok={'true' if ok else 'false'}\n")
+          PY
+
+      - name: Retry build after wait (try 2)
+        if: steps.sanity1.outputs.ok != 'true'
+        run: |
+          echo "First build incomplete (rows=${{ steps.sanity1.outputs.rows }}). Waiting 90s and retrying…"
+          sleep 90
           python fetch_ohlc.py
+
+      - name: Sanity check (try 2)
+        if: steps.sanity1.outputs.ok != 'true'
+        id: sanity2
+        run: |
+          python - <<'PY'
+          import json, os
+          p = 'data/yesterday.json'
+          rows = 0
+          try:
+              with open(p) as f:
+                  d = json.load(f)
+              if isinstance(d, list): rows = len(d)
+              elif isinstance(d, dict) and isinstance(d.get('rows'), list): rows = len(d['rows'])
+              elif isinstance(d, dict): rows = len(d.keys())
+          except Exception as e:
+              pass
+          ok = rows >= 400
+          print(f"rows={rows}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as g:
+              g.write(f"rows={rows}\n")
+              g.write(f"ok={'true' if ok else 'false'}\n")
+          PY
+
+      - name: Fail if still incomplete
+        if: steps.sanity1.outputs.ok != 'true' && steps.sanity2.outputs.ok != 'true'
+        run: |
+          echo "::error::Upstream incomplete after retry. rows=${{ steps.sanity2.outputs.rows }}"
+          exit 1
 
       - name: Upload bad tickers (if any)
         if: always()
@@ -48,12 +114,24 @@ jobs:
           name: bad_tickers
           path: build/bad_tickers.txt
           if-no-files-found: ignore
+          retention-days: 3
 
-      - name: Commit & push outputs
-        if: success()
+      - name: Commit & push outputs (only if complete)
+        if: steps.sanity1.outputs.ok == 'true' || steps.sanity2.outputs.ok == 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add -A
-          git commit -m "build: update aggregates and yesterday.json" || echo "nothing to commit"
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "build: update aggregates and yesterday.json"
+
+          # Avoid non-fast-forward errors
+          git fetch origin main
+          git pull --rebase origin main
+
+          git push origin HEAD:main
