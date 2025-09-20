@@ -101,3 +101,4 @@ jobs:
           git commit -m "build: update aggregates and yesterday.json" || echo "Nothing to commit"
           git pull --rebase origin main
           git push
+
