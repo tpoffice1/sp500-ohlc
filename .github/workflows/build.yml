@@ -29,6 +29,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Count tickers
+        run: |
+          echo "tickers.txt line count:"
+          wc -l tickers.txt || true
+          echo "first 20:"
+          head -n 20 tickers.txt || true
+
       - name: Show repo layout
         run: |
           pwd
@@ -135,3 +142,4 @@ jobs:
           git pull --rebase origin main
 
           git push origin HEAD:main
+
