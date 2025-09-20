@@ -2,9 +2,8 @@ name: Build yesterday's JSON
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
+  schedule:
+    - cron: "15 0 * * 1-5"
 
 jobs:
   build:
@@ -16,68 +15,89 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          # keep it minimal but ensure read_html works
-          pip install pandas lxml
-          # if you have a requirements.txt, this won't hurt
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # Build/refresh tickers.txt WITHOUT yfinance.
-      # Source: Wikipedia “List of S&P 500 companies”.
       - name: Ensure tickers.txt (create/fix if < 400)
         run: |
           python - <<'PY'
           import pathlib
-          import pandas as pd
+
+          tickers = [
+            "AAPL","MSFT","GOOGL","AMZN","META","BRK.B","TSLA","NVDA","UNH","JNJ",
+            "JPM","V","PG","HD","MA","CVX","PFE","KO","PEP","ABBV",
+            # …paste the rest of the 500 tickers here…
+          ]
 
           p = pathlib.Path("tickers.txt")
-          existing = []
           if p.exists():
-              existing = [l.strip().upper() for l in p.read_text().splitlines()
-                          if l.strip() and not l.strip().startswith("#")]
-
-          if len(existing) < 400:
-              url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-              # read_html needs lxml (installed above)
-              df = pd.read_html(url, flavor="lxml")[0]
-              tickers = (
-                  df["Symbol"]
-                  .astype(str)
-                  .str.replace(".", "-", regex=False)   # BRK.B -> BRK-B
-                  .str.upper()
-                  .tolist()
-              )
-              p.write_text("\n".join(tickers) + "\n", encoding="utf-8")
-              print(f"WROTE {len(tickers)} tickers to tickers.txt")
+              current = [ln.strip() for ln in p.read_text().splitlines() if ln.strip()]
           else:
-              print(f"FOUND {len(existing)} tickers in tickers.txt")
+              current = []
+
+          if len(current) < 400:
+              p.write_text("\n".join(tickers) + "\n", encoding="utf-8")
+              print(f"tickers.txt refreshed with {len(tickers)} symbols")
+          else:
+              print(f"tickers.txt already OK ({len(current)} symbols)")
           PY
 
       - name: Guard >= 400 tickers
         run: |
-          n=$(grep -v '^\s*#' tickers.txt | sed '/^\s*$/d' | wc -l)
-          echo "count=$n"
+          n=$(grep -c '^[A-Z]' tickers.txt || true)
+          echo "tickers.txt count: $n"
           if [ "$n" -lt 400 ]; then
             echo "::error::tickers.txt has only $n symbols; need >= 400"
             exit 1
           fi
 
-      - name: Build data
+      - name: Build yesterday's JSON
         run: python fetch_ohlc.py
 
-      - name: Commit outputs (if any)
+      - name: Sanity check (try 1)
+        run: python - <<'PY'
+        import json, pathlib
+        j = json.loads(pathlib.Path("data/yesterday.json").read_text())
+        rows = len(j)
+        print(f"rows={rows}")
+        assert rows >= 400, f"Upstream incomplete: rows={rows}"
+        PY
+
+      - name: Retry build after wait (try 2)
+        if: failure()
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-          git commit -m "build: update data"
-          git pull --rebase origin main || true
-          git push origin HEAD:main
+          echo "First build incomplete. Waiting 90s and retrying..."
+          sleep 90
+          python fetch_ohlc.py
+
+      - name: Sanity check (try 2)
+        if: always()
+        run: python - <<'PY'
+        import json, pathlib
+        j = json.loads(pathlib.Path("data/yesterday.json").read_text())
+        rows = len(j)
+        print(f"rows={rows}")
+        assert rows >= 400, f"Upstream incomplete after retry. rows={rows}"
+        PY
+
+      - name: Upload bad tickers (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bad_tickers
+          path: build/bad_tickers.txt
+          if-no-files-found: ignore
+
+      - name: Commit & push outputs (only if complete)
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/latest.csv data/yesterday.json tickers.txt || true
+          git commit -m "build: update aggregates and yesterday.json" || echo "Nothing to commit"
+          git pull --rebase origin main
+          git push
