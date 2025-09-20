@@ -1,2 +1,4 @@
-pandas>=2.2.2
-requests>=2.31.0
+yfinance>=0.2.40
+pandas>=2.0
+numpy>=1.25
+python-dateutil>=2.8
