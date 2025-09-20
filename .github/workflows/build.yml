@@ -21,9 +21,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install yfinance pandas
+          pip install yfinance pandas beautifulsoup4 requests
 
       - name: Ensure tickers.txt (create if <400)
+        shell: bash
         run: |
           set -euo pipefail
           n=$(grep -E "^[A-Z]" tickers.txt 2>/dev/null | wc -l || true)
@@ -38,140 +39,143 @@ META
 TSLA
 BRK.B
 JPM
-JNJ
 V
+UNH
+XOM
+JNJ
 PG
 NVDA
 HD
 MA
-UNH
-XOM
 BAC
-VZ
-ADBE
+CVX
 PFE
 KO
-NFLX
-DIS
 PEP
-CSCO
-INTC
-ABT
-CRM
-CMCSA
-T
-WMT
-MRK
-CVX
-NKE
-ORCL
-MCD
 COST
-ACN
-DHR
-LLY
-WFC
-MDT
-TXN
-UPS
+ABBV
+AVGO
 TMO
-NEE
-HON
-UNP
-AMGN
-LOW
-MS
-GS
+WMT
+CSCO
+ACN
+ABT
+DHR
+MCD
 LIN
-QCOM
-BMY
-SCHW
-RTX
-INTU
-COP
-AMT
+VZ
+ADBE
+CRM
+NFLX
+TXN
+HON
 PM
-C
-AXP
-CAT
-BLK
+INTC
 IBM
+LOW
+AMD
+AMAT
 SPGI
-CVS
-DE
+BLK
+GS
+RTX
+CAT
 GE
-MMM
-NOW
-BKNG
-ADI
+QCOM
+SBUX
+DE
+AXP
+MDT
 ISRG
-GILD
-SYK
-ZTS
-PLD
-ETN
-MDLZ
-TJX
-PGR
-FIS
-FISV
-USB
-PNC
-CB
-MMC
-MO
-CI
-DUK
-TGT
-SO
-CL
-BDX
-APD
-NSC
 ADP
-SHW
-EL
-REGN
-EQIX
-ECL
-ICE
+BKNG
+SYK
+ELV
+LMT
+BA
+CI
+NOW
+PLD
+ZTS
+MO
+BDX
+USB
+SO
+MU
+PNC
+SCHW
+CB
 CME
-HUM
-PSA
-WM
-ITW
-FDX
-SRE
-NOC
-GD
-TRV
-AON
-...
-# (keep adding until you have >400 symbols)
+CCI
+TGT
+EQIX
+SHW
+FISV
+MMC
+ETN
+DUK
+APD
+GM
+REGN
+KLAC
+# … (add remaining S&P500 tickers here — needs ≥400 lines)
 EOF
-          else
-            echo "tickers.txt has $n symbols"
           fi
 
-      - name: Build JSON (allow retry)
+      - name: Guard >= 400 tickers
+        shell: bash
         run: |
-          set -e
-          python fetch_ohlc.py || true
+          set -euo pipefail
+          n=$(grep -E "^[A-Z]" tickers.txt | wc -l)
+          if [ "$n" -lt 400 ]; then
+            echo "tickers.txt has only $n symbols; need >=400"
+            exit 1
+          fi
 
-      - name: Sanity check
+      - name: Build yesterday's JSON
+        run: python fetch_ohlc.py
+
+      - name: Sanity check (try 1)
         run: |
           python - <<'PY'
           import json, pathlib
-          rows = len(json.loads(pathlib.Path("data/yesterday.json").read_text()))
-          print(f"rows={rows}")
+          data = json.loads(pathlib.Path("data/yesterday.json").read_text())
+          rows = len(data)
+          print(f"Rows={rows}")
           assert rows >= 400, f"Upstream incomplete: rows={rows}"
           PY
 
-      - name: Commit & push
+      - name: Retry build after wait (try 2)
+        if: failure()
+        run: |
+          echo "First build incomplete. Waiting 90s and retrying..."
+          sleep 90
+          python fetch_ohlc.py
+
+      - name: Sanity check (try 2)
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          data = json.loads(pathlib.Path("data/yesterday.json").read_text())
+          rows = len(data)
+          print(f"Rows={rows}")
+          assert rows >= 400, f"Upstream incomplete after retry. rows={rows}"
+          PY
+
+      - name: Upload bad tickers (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bad_tickers
+          path: build/bad_tickers.txt
+          if-no-files-found: ignore
+
+      - name: Commit outputs (only if complete)
         if: success()
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/latest.csv data/yesterday.json tickers.txt
-          git commit -m "update aggregates and yesterday.json" || echo "nothing to commit"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.json data/*.csv tickers.txt
+          git commit -m "build: update aggregates and yesterday.json"
           git push
