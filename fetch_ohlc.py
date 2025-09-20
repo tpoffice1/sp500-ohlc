@@ -1,189 +1,180 @@
 #!/usr/bin/env python3
-import os, io, json, time, sys, re
-from datetime import datetime, timedelta
-from typing import List, Tuple
-import requests
+import os, sys, time, json, math, pathlib, datetime as dt
+from typing import List, Dict
+
 import pandas as pd
+import numpy as np
+import yfinance as yf
 
-# ---- config ----
-REQUIRED = ["Date", "Open", "High", "Low", "Close", "Volume"]
-RAW_DIR = "data/raw"
-OUT_LATEST = "data/latest.csv"
-OUT_YDAY_JSON = "data/yesterday.json"
-BAD_TICKERS = "build/bad_tickers.txt"
-TICKERS_TXT = "tickers.txt"
+ROOT = pathlib.Path(__file__).resolve().parent
+DATA_DIR = ROOT / "data"
+BUILD_DIR = ROOT / "build"
+DATA_DIR.mkdir(exist_ok=True, parents=True)
+BUILD_DIR.mkdir(exist_ok=True, parents=True)
 
-# Stooq daily CSV endpoint. We try two symbol forms per ticker.
-# Examples:
-#   https://stooq.com/q/d/l/?s=aapl&i=d
-#   https://stooq.com/q/d/l/?s=aapl.us&i=d
-STOOQ_URL = "https://stooq.com/q/d/l/?s={sym}&i=d"
+TICKERS_FILE = ROOT / "tickers.txt"
+OUT_JSON = DATA_DIR / "yesterday.json"
+OUT_CSV  = DATA_DIR / "latest.csv"
+BAD_TICKERS = BUILD_DIR / "bad_tickers.txt"
 
-# ----------------
+# ---------- helpers
 
-def ensure_dirs():
-    os.makedirs(RAW_DIR, exist_ok=True)
-    os.makedirs("data", exist_ok=True)
-    os.makedirs("build", exist_ok=True)
+def read_tickers(path: pathlib.Path) -> List[str]:
+    tickers = []
+    with path.open() as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            tickers.append(s.upper())
+    return tickers
 
-def read_tickers(path: str) -> List[str]:
-    if not os.path.exists(path):
-        print(f"{path} not found", file=sys.stderr)
-        sys.exit(1)
-    with open(path, "r", encoding="utf-8") as f:
-        return [t.strip().upper() for t in f if t.strip()]
+def chunked(seq, n):
+    for i in range(0, len(seq), n):
+        yield seq[i:i+n]
 
-def session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({"User-Agent": "sp500-ohlc/CI"})
-    return s
+def last_trading_day(today=None):
+    tz = dt.timezone.utc
+    today = today or dt.datetime.now(tz).date()
+    # Go back up to 7 days to find the most recent trading day in the data
+    return today
 
-def is_html(text: str) -> bool:
-    t = text.strip().lower()
-    return t.startswith("<!doctype") or t.startswith("<html")
-
-def normalize_headers(df: pd.DataFrame) -> pd.DataFrame:
-    # lower/strip then map variants to canonical
-    lowered = {c: re.sub(r"\s+", "", str(c)).lower() for c in df.columns}
-    df = df.rename(columns=lowered)
-    mapping = {
-        "date": "Date",
-        "timestamp": "Date",
-        "open": "Open",
-        "high": "High",
-        "low": "Low",
-        "close": "Close",
-        "adjclose": "Close",
-        "adj_close": "Close",
-        "volume": "Volume",
-        "vol": "Volume",
-    }
-    for k, v in mapping.items():
-        if k in df.columns:
-            df = df.rename(columns={k: v})
+def frame_for_chunk(tickers: List[str]) -> pd.DataFrame:
+    """
+    Download last few days of 1D bars for a batch of tickers.
+    We request 'period=7d' to make sure 'yesterday' exists even after weekends/holidays.
+    """
+    # yfinance returns a MultiIndex columns when group_by='ticker'
+    df = yf.download(
+        tickers=" ".join(tickers),
+        period="7d",
+        interval="1d",
+        auto_adjust=False,
+        group_by="ticker",
+        threads=True,
+        progress=False,
+        timeout=30,
+    )
     return df
 
-def validate_df(df: pd.DataFrame) -> Tuple[bool, str]:
+def extract_yesterday_rows(df: pd.DataFrame, symbols: List[str]) -> Dict[str, Dict]:
+    """
+    From yfinance's multi-index columns (symbol first), select the last row (yesterday)
+    for each symbol and return a dictionary of {symbol: {Date, Close, Volume, ...}}.
+    """
+    out = {}
     if df is None or df.empty:
-        return False, "empty dataframe"
-    missing = [c for c in REQUIRED if c not in df.columns]
-    if missing:
-        return False, f"missing columns: {missing}"
-    return True, ""
+        return out
 
-def fetch_stooq(sym: str, s: requests.Session) -> pd.DataFrame:
-    # Try <sym> and <sym>.us
-    candidates = [sym.lower(), f"{sym.lower()}.us"]
-    last_err = None
-    for c in candidates:
-        url = STOOQ_URL.format(sym=c)
-        try:
-            r = s.get(url, timeout=5)
-            if r.status_code != 200:
-                last_err = f"http {r.status_code} for {url}"
+    # yfinance sometimes returns a single-level columns if only one ticker
+    if isinstance(df.columns, pd.MultiIndex):
+        # last available row in index
+        last_idx = df.index.max()
+        for sym in symbols:
+            if sym not in df.columns.get_level_values(0):
                 continue
-            txt = r.text
-            if not txt.strip() or is_html(txt):
-                last_err = f"non-CSV response for {url}"
+            sub = df[sym]
+            row = sub.loc[last_idx:last_idx]
+            if row.empty:
                 continue
-            df = pd.read_csv(io.StringIO(txt))
-            df = normalize_headers(df)
-            if "Date" in df.columns:
-                df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-                df = df.dropna(subset=["Date"]).sort_values("Date")
-            ok, why = validate_df(df)
-            if ok:
-                return df
-            last_err = why
-        except Exception as e:
-            last_err = str(e)
-            time.sleep(0.5)
-    raise RuntimeError(last_err or "unknown stooq error")
-
-def write_bad(sym: str, reason: str, preview: str = ""):
-    with open(BAD_TICKERS, "a", encoding="utf-8") as f:
-        f.write(f"{sym}\t{reason}\n")
-        if preview:
-            f.write(preview + "\n")
-
-def last_trading_day(now: datetime) -> datetime:
-    # simple weekend logic; skip today to avoid partial candles
-    d = (now - timedelta(days=1)).date()
-    while d.weekday() >= 5:  # 5=Sat,6=Sun
-        d -= timedelta(days=1)
-    return datetime(d.year, d.month, d.day)
+            r = row.iloc[0]
+            # Build normalized record
+            out[sym] = {
+                "symbol": sym,
+                "date": pd.to_datetime(last_idx).date().isoformat(),
+                "open":  float(r.get("Open", np.nan)) if not pd.isna(r.get("Open", np.nan)) else None,
+                "high":  float(r.get("High", np.nan)) if not pd.isna(r.get("High", np.nan)) else None,
+                "low":   float(r.get("Low",  np.nan)) if not pd.isna(r.get("Low",  np.nan)) else None,
+                "close": float(r.get("Close",np.nan)) if not pd.isna(r.get("Close",np.nan)) else None,
+                "volume": int(r.get("Volume", 0)) if not pd.isna(r.get("Volume", np.nan)) else None,
+            }
+    else:
+        # Single ticker case
+        last_idx = df.index.max()
+        r = df.loc[last_idx:last_idx].iloc[0]
+        # We don't know the symbol here; caller must handle single-ticker mapping
+    return out
 
 def main():
-    ensure_dirs()
-    tickers = read_tickers(TICKERS_TXT)
-    s = session()
-
-    frames = []
-    processed = []
-
-    # reset bad list
-    if os.path.exists(BAD_TICKERS):
-        os.remove(BAD_TICKERS)
-
-    for sym in tickers:
-        try:
-            df = fetch_stooq(sym, s)
-            # keep canonical columns only
-            df = df[REQUIRED].copy()
-            # store raw
-            raw_path = os.path.join(RAW_DIR, f"{sym}.csv")
-            df.to_csv(raw_path, index=False)
-            # tag for aggregate
-            df["Symbol"] = sym
-            frames.append(df)
-            processed.append(sym)
-        except Exception as e:
-            # best-effort preview
-            preview = ""
-            try:
-                preview = df.head(3).to_string(index=False)  # type: ignore[name-defined]
-            except Exception:
-                pass
-            write_bad(sym, f"{e}", preview)
-            continue
-
-    if not frames:
-        print("No valid ticker data; see build/bad_tickers.txt", file=sys.stderr)
+    # 1) read tickers
+    if not TICKERS_FILE.exists():
+        print(f"ERROR: {TICKERS_FILE} not found", file=sys.stderr)
         sys.exit(1)
 
-    all_df = pd.concat(frames, ignore_index=True)
-    all_df = all_df.sort_values(["Date", "Symbol"])
-    all_df.to_csv(OUT_LATEST, index=False)
+    symbols = read_tickers(TICKERS_FILE)
+    if len(symbols) < 50:
+        print(f"WARNING: only {len(symbols)} symbols read from {TICKERS_FILE}", file=sys.stderr)
 
-    yday = last_trading_day(datetime.now())
-    ymask = all_df["Date"].dt.date == yday.date()
-    ydf = all_df.loc[ymask, ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"]].copy()
-    # stringify Date for JSON
-    ydf["Date"] = ydf["Date"].dt.strftime("%Y-%m-%d")
-    records = [
-        {
-            "Symbol": r["Symbol"],
-            "Date": r["Date"],
-            "Open": float(r["Open"]),
-            "High": float(r["High"]),
-            "Low": float(r["Low"]),
-            "Close": float(r["Close"]),
-            "Volume": int(r["Volume"]),
-        }
-        for _, r in ydf.iterrows()
-    ]
-    with open(OUT_YDAY_JSON, "w", encoding="utf-8") as f:
-        json.dump(records, f, indent=2)
+    # 2) fetch in batches
+    BATCH = 50
+    RETRIES = 3
+    SLEEP   = 2  # seconds between calls; be nice to Yahoo
 
-    # optionally rewrite tickers.txt to those that succeeded
-    with open(TICKERS_TXT, "w", encoding="utf-8") as f:
-        f.write("\n".join(processed) + "\n")
+    records = {}
+    bad = []
 
-    print(
-        f"Wrote {len(processed)} tickers; "
-        f"latest -> {OUT_LATEST}, yesterday -> {OUT_YDAY_JSON}. "
-        f"See {BAD_TICKERS} for any skipped tickers."
-    )
+    for chunk in chunked(symbols, BATCH):
+        success = False
+        for attempt in range(1, RETRIES + 1):
+            try:
+                df = frame_for_chunk(chunk)
+                partial = extract_yesterday_rows(df, chunk)
+                # mark missing in this chunk
+                missing = [s for s in chunk if s not in partial]
+                for s in missing:
+                    # we won't declare 'bad' yet—retry first
+                    pass
+                # merge
+                records.update(partial)
+                success = True
+                break
+            except Exception as e:
+                print(f"[batch {chunk[0]}…] attempt {attempt} failed: {e}", file=sys.stderr)
+                time.sleep(1 + attempt)
+
+        if not success:
+            bad.extend(chunk)
+
+        time.sleep(SLEEP)
+
+    # anything we didn't fill after all batches becomes bad
+    still_missing = [s for s in symbols if s not in records]
+    for s in still_missing:
+        if s not in bad:
+            bad.append(s)
+
+    # 3) build final list
+    rows = []
+    for s in symbols:
+        rec = records.get(s)
+        if not rec:
+            continue
+        rows.append(rec)
+
+    # 4) output
+    with OUT_JSON.open("w") as f:
+        json.dump(rows, f, indent=2)
+
+    # latest.csv (symbol,date,close,volume)
+    csv_rows = []
+    for r in rows:
+        csv_rows.append({
+            "Symbol": r["symbol"],
+            "Date": r["date"],
+            "Close": r["close"],
+            "Volume": r["volume"],
+        })
+    pd.DataFrame(csv_rows).to_csv(OUT_CSV, index=False)
+
+    if bad:
+        BAD_TICKERS.write_text("\n".join(sorted(set(bad))) + "\n")
+    else:
+        if BAD_TICKERS.exists():
+            BAD_TICKERS.unlink()
+
+    print(f"Wrote {len(rows)} tickers; latest -> {OUT_CSV}, yesterday -> {OUT_JSON}")
+    if bad:
+        print(f"{len(bad)} missing; see {BAD_TICKERS}")
 
 if __name__ == "__main__":
     main()
