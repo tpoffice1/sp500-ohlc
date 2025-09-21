@@ -102,6 +102,8 @@ def main():
         sys.exit(1)
 
     symbols = read_tickers(TICKERS_FILE)
+    symbols = [s.replace('.', '-') for s in symbols]
+
     if len(symbols) < 50:
         print(f"WARNING: only {len(symbols)} symbols read from {TICKERS_FILE}", file=sys.stderr)
 
@@ -178,3 +180,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
