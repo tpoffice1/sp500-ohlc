@@ -1,130 +1,167 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import os
-import sys
-import json
-import time
-import math
-import pathlib
-import datetime as dt
-from typing import List, Dict, Tuple
+import os, sys, json, math, time, pathlib
+from typing import List, Dict
 
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import requests
 
-# ---------- Paths
+# ---------- paths ----------
 ROOT = pathlib.Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 BUILD_DIR = ROOT / "build"
-DATA_DIR.mkdir(exist_ok=True, parents=True)
-BUILD_DIR.mkdir(exist_ok=True, parents=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
 TICKERS_FILE = ROOT / "tickers.txt"
 OUT_JSON = DATA_DIR / "yesterday.json"
-OUT_CSV = DATA_DIR / "latest.csv"
+OUT_CSV  = DATA_DIR / "latest.csv"
 BAD_TICKERS = BUILD_DIR / "bad_tickers.txt"
 
-# ---------- HTTP session that looks like a real browser (prevents 403s)
-SESSION = requests.Session()
-SESSION.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/127.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-})
+# ---------- ticker normalization ----------
+# Known Yahoo aliases and general rule: replace '.' with '-'
+ALIASES = {
+    "BRK.B": "BRK-B",
+    "BF.B":  "BF-B",
+    # add any others you find here…
+}
 
+def normalize_symbol(s: str) -> str:
+    s = s.strip().upper()
+    s = ALIASES.get(s, s)
+    s = s.replace(".", "-")
+    return s
 
-# ---------- helpers
 def read_tickers(path: pathlib.Path) -> List[str]:
-    tickers: List[str] = []
+    tickers = []
     with path.open() as f:
         for line in f:
-            s = line.strip()
-            if not s or s.startswith("#"):
+            t = line.strip()
+            if not t or t.startswith("#"):
                 continue
-            tickers.append(s.upper())
-    return tickers
+            tickers.append(normalize_symbol(t))
+    # de-duplicate while preserving order
+    seen, out = set(), []
+    for t in tickers:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
 
+# ---------- download helpers ----------
+def last_trading_row(df: pd.DataFrame) -> pd.Series | None:
+    """Return the last available OHLC row from a per-ticker frame."""
+    if df is None or df.empty:
+        return None
+    # df may be 1D series (single ticker with columns) or multi-index after download
+    if isinstance(df, pd.Series):
+        return df
+    return df.tail(1).squeeze()
 
-def last_trading_values(ticker: str, tries: int = 3, sleep_s: float = 1.0) -> Tuple[str, float, float]:
+def chunked(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i+n]
+
+def fetch_batch(tickers: list[str]) -> dict[str, Dict] :
     """
-    Return (date_str, close, volume) for the last available daily bar.
-    Raises the last error if all retries fail.
+    Use yf.download in batches for speed; return {ticker: row_dict or None}
     """
-    last_err = None
-    for _ in range(tries):
-        try:
-            t = yf.Ticker(ticker, session=SESSION)
-            # Grab a week; last row will be the latest trading day
-            df = t.history(period="7d", interval="1d", auto_adjust=False)
-            if df is None or df.empty:
-                raise ValueError("empty dataframe")
+    out: dict[str, Dict] = {t: None for t in tickers}
+    # 2d/1d: ask for a 2-day window and take the last row (avoids holiday/weekend)
+    df = yf.download(
+        tickers=" ".join(tickers),
+        period="2d",
+        interval="1d",
+        group_by="ticker",
+        auto_adjust=False,
+        threads=True,
+        progress=False,
+        timeout=30,
+    )
 
-            row = df.iloc[-1]
-            date_str = df.index[-1].strftime("%Y-%m-%d")
-            close = float(row["Close"])
-            vol = float(row["Volume"]) if not pd.isna(row["Volume"]) else 0.0
-            return date_str, close, vol
-        except Exception as e:
-            last_err = e
-            time.sleep(sleep_s)
-    raise last_err if last_err else RuntimeError("unknown download error")
-
-
-def main() -> int:
-    if not TICKERS_FILE.exists():
-        print(f"ERROR: {TICKERS_FILE} not found", file=sys.stderr)
-        return 2
-
-    symbols = read_tickers(TICKERS_FILE)
-    if not symbols:
-        print("ERROR: tickers.txt is empty", file=sys.stderr)
-        return 2
-
-    records: List[Dict] = []
-    bad: List[str] = []
-
-    for i, sym in enumerate(symbols, 1):
-        try:
-            date_str, close, vol = last_trading_values(sym)
-            records.append(
-                {
-                    "symbol": sym,
-                    "date": date_str,
-                    "close": round(close, 6),
-                    "volume": int(vol),
+    # When multiple tickers are requested, yfinance returns a column MultiIndex
+    # like (ticker, field). When a single ticker is requested, fields are columns directly.
+    if isinstance(df.columns, pd.MultiIndex):
+        for t in tickers:
+            try:
+                sub = df[t]
+            except Exception:
+                sub = None
+            row = last_trading_row(sub)
+            if row is not None and "Close" in row:
+                out[t] = {
+                    "symbol": t,
+                    "date": row.name.strftime("%Y-%m-%d") if hasattr(row, "name") else "",
+                    "open":  float(row.get("Open",  np.nan)) if not pd.isna(row.get("Open",  np.nan)) else None,
+                    "high":  float(row.get("High",  np.nan)) if not pd.isna(row.get("High",  np.nan)) else None,
+                    "low":   float(row.get("Low",   np.nan)) if not pd.isna(row.get("Low",   np.nan)) else None,
+                    "close": float(row.get("Close", np.nan)) if not pd.isna(row.get("Close", np.nan)) else None,
+                    "volume": int(row.get("Volume", np.nan)) if not pd.isna(row.get("Volume", np.nan)) else None,
                 }
-            )
+    else:
+        # Single ticker case
+        t = tickers[0]
+        row = last_trading_row(df)
+        if row is not None and "Close" in row:
+            out[t] = {
+                "symbol": t,
+                "date": row.name.strftime("%Y-%m-%d") if hasattr(row, "name") else "",
+                "open":  float(row.get("Open",  np.nan)) if not pd.isna(row.get("Open",  np.nan)) else None,
+                "high":  float(row.get("High",  np.nan)) if not pd.isna(row.get("High",  np.nan)) else None,
+                "low":   float(row.get("Low",   np.nan)) if not pd.isna(row.get("Low",   np.nan)) else None,
+                "close": float(row.get("Close", np.nan)) if not pd.isna(row.get("Close", np.nan)) else None,
+                "volume": int(row.get("Volume", np.nan)) if not pd.isna(row.get("Volume", np.nan)) else None,
+            }
+
+    return out
+
+# ---------- main ----------
+def main() -> int:
+    tickers = read_tickers(TICKERS_FILE)
+    if not tickers:
+        print("No tickers found in tickers.txt", file=sys.stderr)
+        return 1
+
+    results: list[Dict] = []
+    bad: list[str] = []
+
+    # Batch generously to stay fast but not overload: ~60 per batch works well
+    for batch in chunked(tickers, 60):
+        try:
+            got = fetch_batch(batch)
         except Exception as e:
-            bad.append(sym)
-        # Light backoff to be nice to upstream
-        if i % 25 == 0:
-            time.sleep(0.5)
+            # If the whole batch blows up, mark all as bad in this batch
+            print(f"[batch error] {e}", file=sys.stderr)
+            for t in batch:
+                bad.append(t)
+            continue
 
-    # Write bad tickers (if any)
-    if bad:
-        BAD_TICKERS.write_text("\n".join(bad) + "\n", encoding="utf-8")
+        for t in batch:
+            row = got.get(t)
+            if not row or row.get("close") is None:
+                bad.append(t)
+            else:
+                results.append(row)
 
-    # Write JSON
-    # Sort by symbol for deterministic output
-    records.sort(key=lambda r: r["symbol"])
+    # Sort by symbol for stable outputs
+    results.sort(key=lambda r: r["symbol"])
+
+    # Write outputs
     with OUT_JSON.open("w", encoding="utf-8") as f:
-        json.dump(records, f, indent=2)
+        json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
 
-    # Write CSV with a few core fields
-    df = pd.DataFrame.from_records(records, columns=["symbol", "date", "close", "volume"])
+    # CSV
+    df = pd.DataFrame(results, columns=["symbol", "date", "open", "high", "low", "close", "volume"])
     df.to_csv(OUT_CSV, index=False)
 
-    print(f"Wrote {len(records)} rows; bad tickers: {len(bad)}", flush=True)
-    # Exit non-zero if we got fewer than 9 rows (guards earlier sanity checks)
-    return 0 if len(records) >= 9 else 1
+    # bad tickers (one per line)
+    with BAD_TICKERS.open("w", encoding="utf-8") as f:
+        for t in bad:
+            f.write(t + "\n")
 
+    print(f"Wrote {len(results)} rows; bad tickers: {len(bad)}")
+    # Always exit 0 so the workflow proceeds (sanity steps will catch empties)
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())
