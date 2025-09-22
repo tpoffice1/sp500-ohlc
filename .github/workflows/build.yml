@@ -2,8 +2,6 @@ name: Build yesterday's JSON
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 13 * * 1-5"   # 13:00 UTC on weekdays
 
 jobs:
   build:
@@ -18,100 +16,55 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install yfinance pandas beautifulsoup4 requests peewee
+        run: python -m pip install --upgrade pip && ( [ -f requirements.txt ] && pip install -r requirements.txt || true ) && pip install pandas lxml yfinance
 
-      - name: Ensure tickers.txt (create/fix if < 400)
+      # Create/refresh tickers.txt from Wikipedia if it has < 400 symbols
+      - name: Ensure tickers.txt
         shell: bash
         run: |
-          set -euo pipefail
-          n=$(grep -E "^[A-Z]" tickers.txt 2>/dev/null | wc -l || true)
-          echo "Existing tickers in tickers.txt: $n"
+          set -e
+          n=0; [ -f tickers.txt ] && n=$(grep -E '^[A-Za-z0-9.-]+' tickers.txt | wc -l || true)
+          echo "Existing tickers count: $n"
           if [ "$n" -lt 400 ]; then
-            echo "tickers.txt missing/short; writing static S&P 500 symbols"
-            cat > tickers.txt <<'EOF'
-AAPL
-MSFT
-GOOGL
-AMZN
-META
-TSLA
-BRK-B
-JPM
-V
-AVGO
-UNH
-XOM
-JNJ
-WMT
-NVDA
-HD
-MA
-PG
-CVX
-BAC
-KO
-PFE
-ABBV
-PEP
-COST
-TMO
-MRK
-CSCO
-DIS
-ACN
-# … keep the rest of your symbols here …
-# Make sure each ticker is on its own line, no trailing spaces
-EOF
+            python -c "import pandas as pd, pathlib; url='https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'; df=pd.read_html(url, flavor='lxml')[0]; syms=(df['Symbol'].astype(str).str.replace('.','-', regex=False).str.upper().tolist()); syms=sorted(dict.fromkeys(syms)); pathlib.Path('tickers.txt').write_text('\n'.join(syms)+'\n', encoding='utf-8'); print(f'WROTE {len(syms)} symbols to tickers.txt')"
           fi
 
-      - name: Build data
-        shell: bash
+      - name: Guard >= 400 tickers
         run: |
-          set -euo pipefail
-          echo "Running data build…"
-          python fetch_ohlc.py
+          n=$(grep -E '^[A-Za-z0-9.-]+' tickers.txt | wc -l)
+          echo "tickers.txt count: $n"
+          if [ "$n" -lt 400 ]; then
+            echo "::error::tickers.txt has only $n symbols"
+            exit 1
+          fi
 
-      - name: Sanity check (try 1)
-        shell: bash
-        run: |
-          python - <<'PY'
-import json, pathlib
-p = pathlib.Path("data/yesterday.json")
-j = json.loads(p.read_text())
-rows = len(j)
-print("rows=", rows)
-assert rows >= 400, f"upstream incomplete: rows={rows}"
-PY
+      - name: Build data (try 1)
+        run: python fetch_ohlc.py
 
-      - name: Retry build after wait (try 2)
+      - name: Sanity (try 1)
+        id: sanity1
+        run: python -c "import json, pathlib, sys; p=pathlib.Path('data/yesterday.json'); data=json.loads(p.read_text()) if p.exists() else []; rows=len(data) if isinstance(data,list) else 0; print('rows=',rows); sys.exit(0 if rows>=400 else 1)"
+
+      - name: Retry build (try 2)
         if: failure()
+        run: bash -lc "echo 'retrying after 90s…'; sleep 90; python fetch_ohlc.py"
+
+      - name: Sanity (try 2)
+        if: always()
+        run: python -c "import json, pathlib, sys; p=pathlib.Path('data/yesterday.json'); data=json.loads(p.read_text()) if p.exists() else []; rows=len(data) if isinstance(data,list) else 0; print('rows=',rows); sys.exit(0 if rows>=400 else 1)"
+
+      - name: Commit & push outputs (only if complete)
+        if: success()
         shell: bash
         run: |
-          echo "First build incomplete; wait 90s and retry…"
-          sleep 90
-          python fetch_ohlc.py
-
-      - name: Sanity check (try 2)
-        if: always()
-        shell: bash
-        run: |
-          python - <<'PY'
-import json, pathlib
-p = pathlib.Path("data/yesterday.json")
-j = json.loads(p.read_text())
-rows = len(j)
-print("rows=", rows)
-assert rows >= 400, f"upstream incomplete after retry: rows={rows}"
-PY
-
-      - name: Upload bad tickers (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bad_tickers
-          path: build/bad_tickers.txt
-          if-no-files-found: ignore
+          set -e
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.json data/*.csv tickers.txt 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "build: update aggregates and yesterday.json"
+            git pull --rebase origin main || true
+            git push origin HEAD:main
+          fi
