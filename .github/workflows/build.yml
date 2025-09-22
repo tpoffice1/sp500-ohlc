@@ -21,91 +21,130 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install yfinance pandas beautifulsoup4 requests
+          pip install yfinance pandas numpy requests beautifulsoup4
 
-      - name: Ensure tickers.txt (create if <400)
+      - name: Ensure tickers.txt (create/refresh if < 400)
         shell: bash
         run: |
           set -euo pipefail
-          echo "Checking tickers.txt …"
+          echo "Checking tickers.txt…"
           count=$(grep -E "^[A-Za-z0-9.-]+" tickers.txt 2>/dev/null | wc -l || echo 0)
-          echo "tickers.txt count: $count"
+          echo "Existing count: $count"
           if [ "$count" -lt 400 ]; then
-            echo "Fetching S&P 500 constituents CSV…"
-            curl -sSfL --connect-timeout 5 --max-time 20 -o constituents.csv \
+            echo "Refreshing from S&P 500 dataset…"
+            curl -sSfL --connect-timeout 5 --max-time 20 \
+              -o constituents.csv \
               https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv \
-              || curl -sSfL --connect-timeout 5 --max-time 20 -o constituents.csv \
+              || curl -sSfL --connect-timeout 5 --max-time 20 \
+              -o constituents.csv \
               https://cdn.jsdelivr.net/gh/datasets/s-and-p-500-companies/data/constituents.csv
             awk -F, 'NR>1 {print $1}' constituents.csv > tickers.txt
-            rm constituents.csv
-            echo "Refreshed tickers.txt ($(wc -l < tickers.txt)) symbols"
+            rm -f constituents.csv
           fi
-
-      - name: Guard >= 400 tickers
-        shell: bash
-        run: |
           n=$(grep -E "^[A-Za-z0-9.-]+" tickers.txt | wc -l)
           echo "tickers.txt count: $n"
           if [ "$n" -lt 400 ]; then
-            echo "::error::tickers.txt has only $n symbols"
+            echo "::error::tickers.txt has only $n tickers"
             exit 1
           fi
 
-      # ---- Build data (try 1) ----
-      - name: Build data (try 1)
+      - name: Build data (fast inline)
         env:
           PYTHONUNBUFFERED: "1"
         shell: bash
         run: |
           set -euo pipefail
-          echo "Starting fetch_ohlc.py @ $(date -u)"
-          if timeout 90s python -u fetch_ohlc.py; then
-            echo "fetch_ohlc.py finished"
-          else
-            code=$?
-            echo "::warning::fetch_ohlc.py failed or timed out (exit $code)"
-            exit $code
-          fi
-          echo "Quick sanity:"
           python - <<'PY'
-          import json, pathlib, sys
-          p = pathlib.Path('data/yesterday.json')
-          rows = len(json.loads(p.read_text())) if p.exists() else 0
-          print("rows:", rows)
-          sys.exit(0 if rows >= 400 else 2)
+          import pathlib, json, sys
+          import pandas as pd
+          import numpy as np
+          import yfinance as yf
+
+          ROOT = pathlib.Path(".")
+          DATA = ROOT / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+          out_json = DATA / "yesterday.json"
+          out_csv  = DATA / "latest.csv"
+
+          # read tickers
+          tfile = ROOT / "tickers.txt"
+          tickers = [t.strip().upper() for t in tfile.read_text().splitlines()
+                     if t.strip() and not t.strip().startswith("#")]
+          if len(tickers) < 400:
+            print(f"Too few tickers: {len(tickers)}", file=sys.stderr)
+            sys.exit(2)
+
+          # yfinance multi download
+          print(f"Downloading {len(tickers)} tickers via yfinance…", flush=True)
+          # 2 trading days ensures the last row is "yesterday" in most regions
+          df = yf.download(
+              tickers,
+              period="2d",
+              interval="1d",
+              group_by="ticker",
+              auto_adjust=False,
+              threads=True,
+              progress=False
+          )
+
+          rows = []
+          # Handle case: single-ticker returns single-index DataFrame
+          def last_row_for_one(sym, sdf):
+            # sdf is DataFrame with columns [Open, High, Low, Close, Adj Close, Volume]
+            if sdf is None or sdf.empty:
+              return None
+            last = sdf.tail(1)
+            idx  = last.index[-1]
+            return {
+              "symbol": sym,
+              "date": str(getattr(idx, "date", lambda: idx)()),
+              "open": float(last["Open"].iloc[0]) if "Open" in last else None,
+              "high": float(last["High"].iloc[0]) if "High" in last else None,
+              "low":  float(last["Low"].iloc[0]) if "Low"  in last else None,
+              "close": float(last["Close"].iloc[0]) if "Close" in last else None,
+              "volume": int(last["Volume"].iloc[0]) if "Volume" in last else 0,
+            }
+
+          if isinstance(df.columns, pd.MultiIndex):
+            # multi-ticker shape: top level is ticker
+            for sym in tickers:
+              if sym not in df.columns.get_level_values(0):
+                continue
+              try:
+                sdf = df[sym].dropna(how="all")
+                row = last_row_for_one(sym, sdf)
+                if row and row["close"] is not None:
+                  rows.append(row)
+              except Exception:
+                pass
+          else:
+            # single ticker case (unlikely here, but safe)
+            sym = tickers[0]
+            row = last_row_for_one(sym, df)
+            if row and row["close"] is not None:
+              rows.append(row)
+
+          print(f"Built {len(rows)} rows", flush=True)
+          if len(rows) < 200:
+            print("::error::Too few rows; market closed or data issue", file=sys.stderr)
+            sys.exit(3)
+
+          # Write JSON
+          out_json.write_text(json.dumps(rows, ensure_ascii=False))
+
+          # Write CSV
+          pd.DataFrame(rows)[["symbol","date","open","high","low","close","volume"]].to_csv(
+            out_csv, index=False
+          )
           PY
 
-      # ---- Retry build (try 2) ----
-      - name: Retry build (try 2)
-        if: failure()
+      - name: Commit & push outputs
         shell: bash
         run: |
-          set -euo pipefail
-          echo "Retrying after 10s…"; sleep 10
-          timeout 90s python -u fetch_ohlc.py
-          python - <<'PY'
-          import json, pathlib, sys
-          p = pathlib.Path('data/yesterday.json')
-          rows = len(json.loads(p.read_text())) if p.exists() else 0
-          print("rows (retry):", rows)
-          sys.exit(0 if rows >= 400 else 2)
-          PY
-
-      - name: Commit & push outputs (only if complete)
-        if: success()
-        shell: bash
-        run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/latest.csv data/yesterday.json || true
-          git commit -m "build: update aggregates and yesterday.json" || echo "No changes"
+          git add data/yesterday.json data/latest.csv
+          git commit -m "build: update yesterday.json & latest.csv" || echo "No changes"
           git push origin HEAD:main || echo "Push skipped"
 
-      - name: Post Set up Python
-        if: always()
-        run: echo "Cleanup done"
-
-      - name: Post Checkout
-        if: always()
-        run: echo "Done"
