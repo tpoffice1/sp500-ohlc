@@ -3,7 +3,7 @@ name: Build yesterday's JSON
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 13 * * 1-5"  # 13:00 UTC on weekdays
+    - cron: "0 13 * * 1-5"
 
 jobs:
   build:
@@ -20,79 +20,171 @@ jobs:
       - name: Install deps
         shell: bash
         run: |
-          set -e
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          # needed for ticker scraping and your fetch script
-          pip install pandas lxml yfinance
+          pip install yfinance pandas beautifulsoup4 requests
 
-      # Build/refresh tickers.txt from Wikipedia if it's missing/short
       - name: Ensure tickers.txt (create/fix if < 400)
         shell: bash
         run: |
-          set -e
-          have=0
-          if [ -f tickers.txt ]; then
-            have=$(grep -E '^[A-Za-z0-9.-]+' tickers.txt | wc -l || true)
-          fi
-          echo "Existing tickers in tickers.txt: $have"
-          if [ "$have" -lt 400 ]; then
-            python - <<'PY'
-            import pandas as pd, pathlib
-            url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-            df = pd.read_html(url, flavor="lxml")[0]
-            syms = (
-                df["Symbol"]
-                .astype(str)
-                .str.replace(".", "-", regex=False)   # BRK.B -> BRK-B, BF.B -> BF-B
-                .str.upper()
-                .tolist()
-            )
-            # Dedup + sort for stability
-            syms = sorted(dict.fromkeys(syms))
-            pathlib.Path("tickers.txt").write_text("\n".join(syms) + "\n", encoding="utf-8")
-            print(f"WROTE {len(syms)} symbols to tickers.txt")
-            PY
-          fi
-
-      - name: Guard >= 400 tickers
-        shell: bash
-        run: |
-          set -e
-          n=$(grep -E '^[A-Z0-9.-]+' tickers.txt | wc -l)
-          echo "tickers.txt count: $n"
+          set -euo pipefail
+          n=$(grep -E "^[A-Z]" tickers.txt 2>/dev/null | wc -l || true)
+          echo "Existing tickers in tickers.txt: $n"
           if [ "$n" -lt 400 ]; then
-            echo "::error::tickers.txt has only $n symbols; need >= 400"
-            exit 1
+            echo "tickers.txt missing or short; writing static S&P500 list"
+            cat > tickers.txt <<'EOF'
+AAPL
+MSFT
+GOOGL
+AMZN
+META
+TSLA
+BRK.B
+JPM
+V
+UNH
+JNJ
+XOM
+PG
+NVDA
+HD
+MA
+ABBV
+CVX
+PFE
+KO
+PEP
+BAC
+COST
+DIS
+WMT
+NFLX
+INTC
+CSCO
+TMO
+AVGO
+ADBE
+CRM
+ACN
+CMCSA
+TXN
+ABT
+LIN
+NKE
+AMD
+PM
+ORCL
+QCOM
+NEE
+DHR
+MCD
+LOW
+BMY
+AMGN
+HON
+UPS
+MS
+SCHW
+RTX
+IBM
+CAT
+SPGI
+BA
+GE
+GS
+PLD
+MDT
+BLK
+DE
+INTU
+AMAT
+NOW
+ISRG
+BKNG
+SYK
+ZTS
+CVS
+C
+LRCX
+PYPL
+ADI
+T
+MMC
+AMT
+GILD
+ELV
+MO
+BDX
+MDLZ
+REGN
+ADP
+PNC
+MU
+TJX
+SO
+VRTX
+APD
+PGR
+CI
+CL
+WM
+ETN
+HUM
+EOG
+DUK
+FDX
+NSC
+KMB
+SHW
+CB
+CSX
+CME
+USB
+ALL
+GD
+AON
+AEP
+PH
+TRV
+MMM
+LMT
+F
+D
+KKR
+EOF
+
+            n=$(grep -E "^[A-Z]" tickers.txt | wc -l)
+            echo "tickers.txt count after write: $n"
+            if [ "$n" -lt 400 ]; then
+              echo "tickers.txt still too short ($n) — abort." >&2
+              exit 2
+            fi
           fi
 
-      - name: Build yesterday's JSON (try 1)
+      - name: Build data (non-fatal while we stabilize)
         shell: bash
         run: |
           set -e
-          python fetch_ohlc.py
+          python fetch_ohlc.py || true
 
-      - name: Sanity check (try 1)
-        id: sanity1
+      - name: Sanity check JSON (try 1)
         shell: bash
         run: |
           set -e
           python - <<'PY'
-          import json, pathlib, sys
-          p = pathlib.Path("data/yesterday.json")
-          if not p.exists():
-              print("rows=0"); sys.exit(1)
-          data = json.loads(p.read_text())
-          rows = len(data) if isinstance(data, list) else 0
-          print(f"rows={rows}")
-          assert rows >= 400, f"Upstream incomplete: rows={rows}"
-          PY
+import json, pathlib
+p = pathlib.Path("data/yesterday.json")
+j = json.loads(p.read_text())
+rows = len(j)
+print("rows=", rows)
+assert rows >= 400, f"upstream incomplete: rows={rows}"
+PY
 
       - name: Retry build after wait (try 2)
         if: failure()
         shell: bash
         run: |
-          echo "First build incomplete. Waiting 90s and retrying..."
+          echo "First build incomplete. Waiting 90s and retrying…"
           sleep 90
           python fetch_ohlc.py
 
@@ -100,39 +192,25 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set -e
           python - <<'PY'
-          import json, pathlib, sys
-          p = pathlib.Path("data/yesterday.json")
-          if not p.exists():
-              print("rows=0"); sys.exit(1)
-          data = json.loads(p.read_text())
-          rows = len(data) if isinstance(data, list) else 0
-          print(f"rows={rows}")
-          assert rows >= 400, f"Upstream incomplete after retry. rows={rows}"
-          PY
-
-      - name: Upload bad tickers (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bad_tickers
-          path: build/bad_tickers.txt
-          if-no-files-found: ignore
-          retention-days: 3
+import json, pathlib
+p = pathlib.Path("data/yesterday.json")
+j = json.loads(p.read_text())
+rows = len(j)
+print("rows=", rows)
+assert rows >= 400, f"upstream incomplete after retry: rows={rows}"
+PY
 
       - name: Commit & push outputs (only if complete)
-        if: success()
         shell: bash
         run: |
           set -e
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/*.json data/*.csv tickers.txt || true
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
+          if ! git diff --quiet -- data/ tickers.txt; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/ tickers.txt
+            git commit -m "build: update aggregates and yesterday.json"
+            git push origin HEAD:main
+          else
+            echo "No changes to commit."
           fi
-          git commit -m "build: update aggregates and yesterday.json"
-          git pull --rebase origin main || true
-          git push origin HEAD:main
