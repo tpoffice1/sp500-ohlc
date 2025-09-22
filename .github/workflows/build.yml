@@ -57,10 +57,35 @@ jobs:
 
       # ---------------------- Build OHLC snapshot -----------------------
       - name: Build data (try 1)
+        env:
+          PYTHONUNBUFFERED: "1"
         shell: bash
         run: |
           set -euo pipefail
-          python fetch_ohlc.py
+          echo "Starting fetch_ohlc.py @ $(date -u)"
+          # kill the run if it exceeds 12 minutes, surface a clear exit code
+          timeout 12m python fetch_ohlc.py || {
+            echo "::warning::fetch_ohlc.py exceeded timeout or failed"
+            pkill -f fetch_ohlc.py || true
+            exit 124
+          }
+          echo "Finished fetch_ohlc.py @ $(date -u)"
+          echo "Listing data/:"
+          ls -lh data || true
+          echo "Quick sanity:"
+          python - <<'PY'
+          import json, pathlib, sys
+          p = pathlib.Path('data/yesterday.json')
+          if not p.exists():
+              print("yesterday.json: MISSING")
+              sys.exit(1)
+          data = json.loads(p.read_text())
+          rows = len(data) if isinstance(data, list) else 0
+          print("yesterday.json exists, rows =", rows, "size(bytes) =", p.stat().st_size)
+          if rows < 400:
+              print("ERROR: too few rows")
+              sys.exit(2)
+          PY
 
       - name: Sanity (try 1)
         shell: bash
@@ -100,3 +125,4 @@ jobs:
             build/bad_tickers.txt
           message: "build: update aggregates and yesterday.json"
           default_author: github_actions
+
