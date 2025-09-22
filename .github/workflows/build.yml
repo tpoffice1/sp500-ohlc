@@ -38,6 +38,22 @@ jobs:
             exit 1
           fi
 
+      - name: Generate tickers.txt from Wikipedia (>=400)
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          # Pull the official list from Wikipedia
+          df = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
+          # Yahoo uses dash instead of dot in tickers (e.g., BRK-B, BF-B)
+          syms = df["Symbol"].astype(str).str.replace(r"\.", "-", regex=True)
+          # Write one-per-line
+          with open("tickers.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(syms) + "\n")
+          print("tickers.txt written with", len(syms), "symbols")
+          assert len(syms) >= 400
+          PY
+
       - name: Build data (try 1)
         run: python fetch_ohlc.py
 
@@ -68,3 +84,4 @@ jobs:
             git pull --rebase origin main || true
             git push origin HEAD:main
           fi
+
