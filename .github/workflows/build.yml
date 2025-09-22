@@ -34,13 +34,17 @@ jobs:
           if [ "${have}" -lt 400 ]; then
             echo "Fetching S&P 500 constituents CSV…"
             tmp=$(mktemp)
-            if curl -fsSL https://raw.githubusercontent.com/datasets/s-and-p-500/master/data/constituents.csv -o "${tmp}"; then
-              true
+            # Primary source (maintained):
+            URL1="https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
+            # Mirror:
+            URL2="https://cdn.jsdelivr.net/gh/datasets/s-and-p-500-companies@master/data/constituents.csv"
+            if curl -fsSL "${URL1}" -o "${tmp}"; then
+              echo "Downloaded from ${URL1}"
             else
-              echo "Primary source failed; trying jsDelivr mirror…"
-              curl -fsSL https://cdn.jsdelivr.net/gh/datasets/s-and-p-500@master/data/constituents.csv -o "${tmp}"
+              echo "Primary failed; trying mirror…"
+              curl -fsSL "${URL2}" -o "${tmp}"
             fi
-            # Column 1 is the ticker symbol. Remove quotes, keep non-empty.
+            # Column 1 is the ticker symbol. Remove quotes; keep non-empty.
             tail -n +2 "${tmp}" | cut -d',' -f1 | tr -d '"' | grep -E '^[A-Za-z0-9.-]+' > tickers.txt
             rm -f "${tmp}"
           fi
