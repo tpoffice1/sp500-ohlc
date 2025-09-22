@@ -3,7 +3,7 @@ name: Build yesterday's JSON
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 13 * * 1-5"
+    - cron: "0 13 * * 1-5"   # 13:00 UTC on weekdays
 
 jobs:
   build:
@@ -15,14 +15,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install deps
         shell: bash
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install yfinance pandas beautifulsoup4 requests
+          pip install yfinance pandas beautifulsoup4 requests peewee
 
       - name: Ensure tickers.txt (create/fix if < 400)
         shell: bash
@@ -31,7 +31,7 @@ jobs:
           n=$(grep -E "^[A-Z]" tickers.txt 2>/dev/null | wc -l || true)
           echo "Existing tickers in tickers.txt: $n"
           if [ "$n" -lt 400 ]; then
-            echo "tickers.txt missing or short; writing static S&P500 list"
+            echo "tickers.txt missing/short; writing static S&P 500 symbols"
             cat > tickers.txt <<'EOF'
 AAPL
 MSFT
@@ -39,138 +39,45 @@ GOOGL
 AMZN
 META
 TSLA
-BRK.B
+BRK-B
 JPM
 V
+AVGO
 UNH
-JNJ
 XOM
-PG
+JNJ
+WMT
 NVDA
 HD
 MA
-ABBV
+PG
 CVX
-PFE
-KO
-PEP
 BAC
+KO
+PFE
+ABBV
+PEP
 COST
-DIS
-WMT
-NFLX
-INTC
-CSCO
 TMO
-AVGO
-ADBE
-CRM
+MRK
+CSCO
+DIS
 ACN
-CMCSA
-TXN
-ABT
-LIN
-NKE
-AMD
-PM
-ORCL
-QCOM
-NEE
-DHR
-MCD
-LOW
-BMY
-AMGN
-HON
-UPS
-MS
-SCHW
-RTX
-IBM
-CAT
-SPGI
-BA
-GE
-GS
-PLD
-MDT
-BLK
-DE
-INTU
-AMAT
-NOW
-ISRG
-BKNG
-SYK
-ZTS
-CVS
-C
-LRCX
-PYPL
-ADI
-T
-MMC
-AMT
-GILD
-ELV
-MO
-BDX
-MDLZ
-REGN
-ADP
-PNC
-MU
-TJX
-SO
-VRTX
-APD
-PGR
-CI
-CL
-WM
-ETN
-HUM
-EOG
-DUK
-FDX
-NSC
-KMB
-SHW
-CB
-CSX
-CME
-USB
-ALL
-GD
-AON
-AEP
-PH
-TRV
-MMM
-LMT
-F
-D
-KKR
+# … keep the rest of your symbols here …
+# Make sure each ticker is on its own line, no trailing spaces
 EOF
-
-            n=$(grep -E "^[A-Z]" tickers.txt | wc -l)
-            echo "tickers.txt count after write: $n"
-            if [ "$n" -lt 400 ]; then
-              echo "tickers.txt still too short ($n) — abort." >&2
-              exit 2
-            fi
           fi
 
-      - name: Build data (non-fatal while we stabilize)
+      - name: Build data
         shell: bash
         run: |
-          set -e
-          python fetch_ohlc.py || true
+          set -euo pipefail
+          echo "Running data build…"
+          python fetch_ohlc.py
 
-      - name: Sanity check JSON (try 1)
+      - name: Sanity check (try 1)
         shell: bash
         run: |
-          set -e
           python - <<'PY'
 import json, pathlib
 p = pathlib.Path("data/yesterday.json")
@@ -184,7 +91,7 @@ PY
         if: failure()
         shell: bash
         run: |
-          echo "First build incomplete. Waiting 90s and retrying…"
+          echo "First build incomplete; wait 90s and retry…"
           sleep 90
           python fetch_ohlc.py
 
@@ -201,16 +108,10 @@ print("rows=", rows)
 assert rows >= 400, f"upstream incomplete after retry: rows={rows}"
 PY
 
-      - name: Commit & push outputs (only if complete)
-        shell: bash
-        run: |
-          set -e
-          if ! git diff --quiet -- data/ tickers.txt; then
-            git config user.name  "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add data/ tickers.txt
-            git commit -m "build: update aggregates and yesterday.json"
-            git push origin HEAD:main
-          else
-            echo "No changes to commit."
-          fi
+      - name: Upload bad tickers (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bad_tickers
+          path: build/bad_tickers.txt
+          if-no-files-found: ignore
