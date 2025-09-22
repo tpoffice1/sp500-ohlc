@@ -3,12 +3,11 @@ name: Build yesterday's JSON
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 13 * * 1-5"  # 13:00 UTC on weekdays
+    - cron: "0 13 * * 1-5"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,39 +22,37 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install yfinance pandas requests numpy
+          pip install yfinance pandas beautifulsoup4 requests
 
-      # ------- Get S&P500 tickers from a public CSV (no scraping) -------
-      - name: Refresh S&P 500 tickers (from GitHub CSV; no scraping)
+      - name: Ensure tickers.txt (create if <400)
         shell: bash
         run: |
           set -euo pipefail
-          have=$(grep -E '^[A-Za-z0-9.-]+' -c tickers.txt 2>/dev/null || echo 0)
-          if [ "${have}" -lt 400 ]; then
+          echo "Checking tickers.txt …"
+          count=$(grep -E "^[A-Za-z0-9.-]+" tickers.txt 2>/dev/null | wc -l || echo 0)
+          echo "tickers.txt count: $count"
+          if [ "$count" -lt 400 ]; then
             echo "Fetching S&P 500 constituents CSV…"
-            tmp=$(mktemp)
-            # Primary source (maintained):
-            URL1="https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
-            # Mirror:
-            URL2="https://cdn.jsdelivr.net/gh/datasets/s-and-p-500-companies@master/data/constituents.csv"
-            if curl -fsSL "${URL1}" -o "${tmp}"; then
-              echo "Downloaded from ${URL1}"
-            else
-              echo "Primary failed; trying mirror…"
-              curl -fsSL "${URL2}" -o "${tmp}"
-            fi
-            # Column 1 is the ticker symbol. Remove quotes; keep non-empty.
-            tail -n +2 "${tmp}" | cut -d',' -f1 | tr -d '"' | grep -E '^[A-Za-z0-9.-]+' > tickers.txt
-            rm -f "${tmp}"
+            curl -sSfL --connect-timeout 5 --max-time 20 -o constituents.csv \
+              https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv \
+              || curl -sSfL --connect-timeout 5 --max-time 20 -o constituents.csv \
+              https://cdn.jsdelivr.net/gh/datasets/s-and-p-500-companies/data/constituents.csv
+            awk -F, 'NR>1 {print $1}' constituents.csv > tickers.txt
+            rm constituents.csv
+            echo "Refreshed tickers.txt ($(wc -l < tickers.txt)) symbols"
           fi
-          count=$(grep -E '^[A-Za-z0-9.-]+' -c tickers.txt 2>/dev/null || echo 0)
-          echo "tickers.txt count: ${count}"
-          if [ "${count}" -lt 400 ]; then
-            echo "::error::Still fewer than 400 tickers after refresh; aborting."
+
+      - name: Guard >= 400 tickers
+        shell: bash
+        run: |
+          n=$(grep -E "^[A-Za-z0-9.-]+" tickers.txt | wc -l)
+          echo "tickers.txt count: $n"
+          if [ "$n" -lt 400 ]; then
+            echo "::error::tickers.txt has only $n symbols"
             exit 1
           fi
 
-      # ---------------------- Build OHLC snapshot -----------------------
+      # ---- Build data (try 1) ----
       - name: Build data (try 1)
         env:
           PYTHONUNBUFFERED: "1"
@@ -63,66 +60,52 @@ jobs:
         run: |
           set -euo pipefail
           echo "Starting fetch_ohlc.py @ $(date -u)"
-          # kill the run if it exceeds 12 minutes, surface a clear exit code
-          timeout 12m python fetch_ohlc.py || {
-            echo "::warning::fetch_ohlc.py exceeded timeout or failed"
-            pkill -f fetch_ohlc.py || true
-            exit 124
-          }
-          echo "Finished fetch_ohlc.py @ $(date -u)"
-          echo "Listing data/:"
-          ls -lh data || true
+          if timeout 90s python -u fetch_ohlc.py; then
+            echo "fetch_ohlc.py finished"
+          else
+            code=$?
+            echo "::warning::fetch_ohlc.py failed or timed out (exit $code)"
+            exit $code
+          fi
           echo "Quick sanity:"
           python - <<'PY'
           import json, pathlib, sys
           p = pathlib.Path('data/yesterday.json')
-          if not p.exists():
-              print("yesterday.json: MISSING")
-              sys.exit(1)
-          data = json.loads(p.read_text())
-          rows = len(data) if isinstance(data, list) else 0
-          print("yesterday.json exists, rows =", rows, "size(bytes) =", p.stat().st_size)
-          if rows < 400:
-              print("ERROR: too few rows")
-              sys.exit(2)
+          rows = len(json.loads(p.read_text())) if p.exists() else 0
+          print("rows:", rows)
+          sys.exit(0 if rows >= 400 else 2)
           PY
 
-      - name: Sanity (try 1)
-        shell: bash
-        run: |
-          python -c "import json,sys,pathlib; p=pathlib.Path('data/yesterday.json'); data=json.loads(p.read_text()) if p.exists() else []; rows=len(data) if isinstance(data,list) else 0; print('rows=',rows); sys.exit(0 if rows>0 else 1)"
-
+      # ---- Retry build (try 2) ----
       - name: Retry build (try 2)
         if: failure()
         shell: bash
         run: |
-          echo 'Retrying after 90s…'
-          sleep 90
-          python fetch_ohlc.py
-
-      - name: Sanity (try 2)
-        if: always()
-        shell: bash
-        run: |
-          python -c "import json,sys,pathlib; p=pathlib.Path('data/yesterday.json'); data=json.loads(p.read_text()) if p.exists() else []; rows=len(data) if isinstance(data,list) else 0; print('rows=',rows); sys.exit(0 if rows>0 else 1)"
-
-      - name: Upload bad_tickers (if any)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bad_tickers
-          path: build/bad_tickers.txt
-          if-no-files-found: ignore
+          set -euo pipefail
+          echo "Retrying after 10s…"; sleep 10
+          timeout 90s python -u fetch_ohlc.py
+          python - <<'PY'
+          import json, pathlib, sys
+          p = pathlib.Path('data/yesterday.json')
+          rows = len(json.loads(p.read_text())) if p.exists() else 0
+          print("rows (retry):", rows)
+          sys.exit(0 if rows >= 400 else 2)
+          PY
 
       - name: Commit & push outputs (only if complete)
         if: success()
-        uses: EndBug/add-and-commit@v9
-        with:
-          add: |
-            data/latest.csv
-            data/yesterday.json
-            tickers.txt
-            build/bad_tickers.txt
-          message: "build: update aggregates and yesterday.json"
-          default_author: github_actions
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest.csv data/yesterday.json || true
+          git commit -m "build: update aggregates and yesterday.json" || echo "No changes"
+          git push origin HEAD:main || echo "Push skipped"
 
+      - name: Post Set up Python
+        if: always()
+        run: echo "Cleanup done"
+
+      - name: Post Checkout
+        if: always()
+        run: echo "Done"
