@@ -1,142 +1,42 @@
-name: Build yesterday's JSON
+name: Build & Deploy Tickers
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 13 * * 1-5"
+    # Weekdays @ 10:45 PM UTC (adjust as you like)
+    - cron: "45 22 * * 1-5"
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
-        shell: bash
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install yfinance pandas numpy requests beautifulsoup4
+          python -m pip install -U pip
+          pip install -r requirements.txt
 
-      - name: Ensure tickers.txt (create/refresh if < 400)
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Checking tickers.txt…"
-          count=$(grep -E "^[A-Za-z0-9.-]+" tickers.txt 2>/dev/null | wc -l || echo 0)
-          echo "Existing count: $count"
-          if [ "$count" -lt 400 ]; then
-            echo "Refreshing from S&P 500 dataset…"
-            curl -sSfL --connect-timeout 5 --max-time 20 \
-              -o constituents.csv \
-              https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv \
-              || curl -sSfL --connect-timeout 5 --max-time 20 \
-              -o constituents.csv \
-              https://cdn.jsdelivr.net/gh/datasets/s-and-p-500-companies/data/constituents.csv
-            awk -F, 'NR>1 {print $1}' constituents.csv > tickers.txt
-            rm -f constituents.csv
-          fi
-          n=$(grep -E "^[A-Za-z0-9.-]+" tickers.txt | wc -l)
-          echo "tickers.txt count: $n"
-          if [ "$n" -lt 400 ]; then
-            echo "::error::tickers.txt has only $n tickers"
-            exit 1
-          fi
-
-      - name: Build data (fast inline)
-        env:
-          PYTHONUNBUFFERED: "1"
+      # 👉 This step should produce:
+      #    - data/yesterday.json
+      #    - data/latest.csv
+      # If your repo uses a different script, change the command below.
+      - name: Build OHLC artifacts
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import pathlib, json, sys
-          import pandas as pd
-          import numpy as np
-          import yfinance as yf
-
-          ROOT = pathlib.Path(".")
-          DATA = ROOT / "data"
-          DATA.mkdir(parents=True, exist_ok=True)
-          out_json = DATA / "yesterday.json"
-          out_csv  = DATA / "latest.csv"
-
-          # read tickers
-          tfile = ROOT / "tickers.txt"
-          tickers = [t.strip().upper() for t in tfile.read_text().splitlines()
-                     if t.strip() and not t.strip().startswith("#")]
-          if len(tickers) < 400:
-            print(f"Too few tickers: {len(tickers)}", file=sys.stderr)
-            sys.exit(2)
-
-          # yfinance multi download
-          print(f"Downloading {len(tickers)} tickers via yfinance…", flush=True)
-          # 2 trading days ensures the last row is "yesterday" in most regions
-          df = yf.download(
-              tickers,
-              period="2d",
-              interval="1d",
-              group_by="ticker",
-              auto_adjust=False,
-              threads=True,
-              progress=False
-          )
-
-          rows = []
-          # Handle case: single-ticker returns single-index DataFrame
-          def last_row_for_one(sym, sdf):
-            # sdf is DataFrame with columns [Open, High, Low, Close, Adj Close, Volume]
-            if sdf is None or sdf.empty:
-              return None
-            last = sdf.tail(1)
-            idx  = last.index[-1]
-            return {
-              "symbol": sym,
-              "date": str(getattr(idx, "date", lambda: idx)()),
-              "open": float(last["Open"].iloc[0]) if "Open" in last else None,
-              "high": float(last["High"].iloc[0]) if "High" in last else None,
-              "low":  float(last["Low"].iloc[0]) if "Low"  in last else None,
-              "close": float(last["Close"].iloc[0]) if "Close" in last else None,
-              "volume": int(last["Volume"].iloc[0]) if "Volume" in last else 0,
-            }
-
-          if isinstance(df.columns, pd.MultiIndex):
-            # multi-ticker shape: top level is ticker
-            for sym in tickers:
-              if sym not in df.columns.get_level_values(0):
-                continue
-              try:
-                sdf = df[sym].dropna(how="all")
-                row = last_row_for_one(sym, sdf)
-                if row and row["close"] is not None:
-                  rows.append(row)
-              except Exception:
-                pass
-          else:
-            # single ticker case (unlikely here, but safe)
-            sym = tickers[0]
-            row = last_row_for_one(sym, df)
-            if row and row["close"] is not None:
-              rows.append(row)
-
-          print(f"Built {len(rows)} rows", flush=True)
-          if len(rows) < 200:
-            print("::error::Too few rows; market closed or data issue", file=sys.stderr)
-            sys.exit(3)
-
-          # Write JSON
-          out_json.write_text(json.dumps(rows, ensure_ascii=False))
-
-          # Write CSV
-          pd.DataFrame(rows)[["symbol","date","open","high","low","close","volume"]].to_csv(
-            out_csv, index=False
-          )
-          PY
+          python update_tickers.py
 
       - name: Commit & push outputs
         shell: bash
@@ -144,7 +44,16 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/yesterday.json data/latest.csv
+          git add data/yesterday.json data/latest.csv || true
           git commit -m "build: update yesterday.json & latest.csv" || echo "No changes"
           git push origin HEAD:main || echo "Push skipped"
 
+      # 🚀 Deploy the JSON the page reads, overwriting ONE canonical file on your site
+      - name: Deploy tickers.json to site via SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          server: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          password: ${{ secrets.SFTP_PASS }}
+          local_path: ./data/yesterday.json
+          remote_path: /home/<your-account>/public_html/wp-content/uploads/data/tickers.json
