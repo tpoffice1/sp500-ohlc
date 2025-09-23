@@ -1,10 +1,9 @@
-name: Build & Deploy Tickers
+name: Build & Deploy Tickers (FTP)
 
 on:
   workflow_dispatch:
   schedule:
-    # Weekdays @ 10:45 PM UTC (adjust as you like)
-    - cron: "45 22 * * 1-5"
+    - cron: "45 22 * * 1-5"  # weekdays @ 22:45 UTC
 
 permissions:
   contents: write
@@ -28,10 +27,7 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
 
-      # 👉 This step should produce:
-      #    - data/yesterday.json
-      #    - data/latest.csv
-      # If your repo uses a different script, change the command below.
+      # Produces data/yesterday.json and data/latest.csv
       - name: Build OHLC artifacts
         shell: bash
         run: |
@@ -48,12 +44,20 @@ jobs:
           git commit -m "build: update yesterday.json & latest.csv" || echo "No changes"
           git push origin HEAD:main || echo "Push skipped"
 
-      # 🚀 Deploy the JSON the page reads, overwriting ONE canonical file on your site
-      - name: Deploy tickers.json to site via SFTP
-        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
-        with:
-          server: ${{ secrets.SFTP_HOST }}
-          username: ${{ secrets.SFTP_USER }}
-          password: ${{ secrets.SFTP_PASS }}
-          local_path: ./data/yesterday.json
-          remote_path: /home/<your-account>/public_html/wp-content/uploads/data/tickers.json
+      # Plain FTP upload (port 21). Overwrites ONE canonical file on your site.
+      - name: Deploy tickers.json to site via FTP
+        shell: bash
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}   # e.g. ftpupload.net
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASS }}
+          FTP_ROOT: ${{ secrets.FTP_ROOT }}   # e.g. /tptxdev.com/htdocs
+        run: |
+          set -euo pipefail
+          REMOTE_PATH="${FTP_ROOT%/}/wp-content/uploads/data/tickers.json"
+          echo "Uploading to ftp://${FTP_HOST}${REMOTE_PATH}"
+          # --ftp-create-dirs creates folders; --ftp-method nocwd helps some shared hosts; --disable-epsv helps behind NAT
+          curl --ftp-create-dirs --ftp-method nocwd --disable-epsv \
+            -T ./data/yesterday.json \
+            --user "${FTP_USER}:${FTP_PASS}" \
+            "ftp://${FTP_HOST}${REMOTE_PATH}"
