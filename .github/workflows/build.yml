@@ -1,11 +1,9 @@
 name: Build & Deploy Tickers
 
 on:
-  # Run manually from the Actions tab
   workflow_dispatch:
-  # Optional: uncomment to run on a schedule (UTC)
   # schedule:
-  #   - cron: '15 22 * * 1-5'  # weekdays at 22:15 UTC
+  #   - cron: '15 22 * * 1-5'  # optional: weekdays at 22:15 UTC
 
 permissions:
   contents: write
@@ -35,7 +33,7 @@ jobs:
           fi
 
       # === Build OHLC data (writes data/yesterday.json, data/latest.csv, raw/*.csv) ===
-      # If your repo uses a different entrypoint, change the command here.
+      # Change this command if your repo uses a different entrypoint.
       - name: Build OHLC artifacts
         run: |
           set -e
@@ -44,8 +42,7 @@ jobs:
           ls -lah data | sed 's/^/  /'
           [ -f data/yesterday.json ] && jq -r '.[0] | keys | @csv' data/yesterday.json || true
 
-      # Save artifacts (optional, but handy for debugging)
-      - name: Upload data artifacts
+      - name: Upload data artifacts (optional)
         uses: actions/upload-artifact@v4
         with:
           name: data-out
@@ -57,9 +54,8 @@ jobs:
           retention-days: 3
 
       # === Build names & logos (ticker_meta.json) ===
-      - name: Build ticker_meta.json (names + logos)
-        env:
-          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+      # NOTE: We do NOT pass FMP_API_KEY here. The script will use the SEC fallback only.
+      - name: Build ticker_meta.json (names only via SEC; no FMP)
         run: |
           set -e
           python scripts/build_ticker_meta.py
@@ -94,17 +90,16 @@ jobs:
           BASE="${FTP_ROOT%/}/wp-content/uploads/data"
           echo "Uploading to ftp://${FTP_HOST}${BASE}"
 
-          # Ensure directory exists and upload tickers.json (from yesterday.json)
+          # Upload tickers.json (from yesterday.json)
           curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
             -T ./data/yesterday.json \
             --user "${FTP_USER}:${FTP_PASS}" \
             "ftp://${FTP_HOST}${BASE}/tickers.json"
 
-          # Upload names + logos
+          # Upload names (ticker_meta.json)
           curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
             -T ./data/ticker_meta.json \
             --user "${FTP_USER}:${FTP_PASS}" \
             "ftp://${FTP_HOST}${BASE}/ticker_meta.json"
 
           echo "Deployed tickers.json and ticker_meta.json"
-
