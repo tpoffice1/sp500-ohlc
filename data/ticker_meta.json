@@ -1,0 +1,2002 @@
+{
+  "MMM": {
+    "type": "equity",
+    "name": "3M CO"
+  },
+  "AOS": {
+    "type": "equity",
+    "name": "SMITH A O CORP"
+  },
+  "ABT": {
+    "type": "equity",
+    "name": "ABBOTT LABORATORIES"
+  },
+  "ABBV": {
+    "type": "equity",
+    "name": "AbbVie Inc."
+  },
+  "ACN": {
+    "type": "equity",
+    "name": "Accenture plc"
+  },
+  "ADBE": {
+    "type": "equity",
+    "name": "ADOBE INC."
+  },
+  "AMD": {
+    "type": "equity",
+    "name": "ADVANCED MICRO DEVICES INC"
+  },
+  "AES": {
+    "type": "equity",
+    "name": "AES CORP"
+  },
+  "AFL": {
+    "type": "equity",
+    "name": "AFLAC INC"
+  },
+  "A": {
+    "type": "equity",
+    "name": "AGILENT TECHNOLOGIES, INC."
+  },
+  "APD": {
+    "type": "equity",
+    "name": "Air Products & Chemicals, Inc."
+  },
+  "ABNB": {
+    "type": "equity",
+    "name": "Airbnb, Inc."
+  },
+  "AKAM": {
+    "type": "equity",
+    "name": "AKAMAI TECHNOLOGIES INC"
+  },
+  "ALB": {
+    "type": "equity",
+    "name": "ALBEMARLE CORP"
+  },
+  "ARE": {
+    "type": "equity",
+    "name": "ALEXANDRIA REAL ESTATE EQUITIES, INC."
+  },
+  "ALGN": {
+    "type": "equity",
+    "name": "ALIGN TECHNOLOGY INC"
+  },
+  "ALLE": {
+    "type": "equity",
+    "name": "Allegion plc"
+  },
+  "LNT": {
+    "type": "equity",
+    "name": "ALLIANT ENERGY CORP"
+  },
+  "ALL": {
+    "type": "equity",
+    "name": "ALLSTATE CORP"
+  },
+  "GOOGL": {
+    "type": "equity",
+    "name": "Alphabet Inc."
+  },
+  "GOOG": {
+    "type": "equity",
+    "name": "Alphabet Inc."
+  },
+  "MO": {
+    "type": "equity",
+    "name": "ALTRIA GROUP, INC."
+  },
+  "AMZN": {
+    "type": "equity",
+    "name": "AMAZON COM INC"
+  },
+  "AMCR": {
+    "type": "equity",
+    "name": "Amcor plc"
+  },
+  "AEE": {
+    "type": "equity",
+    "name": "AMEREN CORP"
+  },
+  "AEP": {
+    "type": "equity",
+    "name": "AMERICAN ELECTRIC POWER CO INC"
+  },
+  "AXP": {
+    "type": "equity",
+    "name": "AMERICAN EXPRESS CO"
+  },
+  "AIG": {
+    "type": "equity",
+    "name": "AMERICAN INTERNATIONAL GROUP, INC."
+  },
+  "AMT": {
+    "type": "equity",
+    "name": "AMERICAN TOWER CORP /MA/"
+  },
+  "AWK": {
+    "type": "equity",
+    "name": "American Water Works Company, Inc."
+  },
+  "AMP": {
+    "type": "equity",
+    "name": "AMERIPRISE FINANCIAL INC"
+  },
+  "AME": {
+    "type": "equity",
+    "name": "AMETEK INC/"
+  },
+  "AMGN": {
+    "type": "equity",
+    "name": "AMGEN INC"
+  },
+  "APH": {
+    "type": "equity",
+    "name": "AMPHENOL CORP /DE/"
+  },
+  "ADI": {
+    "type": "equity",
+    "name": "ANALOG DEVICES INC"
+  },
+  "AON": {
+    "type": "equity",
+    "name": "Aon plc"
+  },
+  "APA": {
+    "type": "equity",
+    "name": "APA Corp"
+  },
+  "APO": {
+    "type": "equity",
+    "name": "Apollo Global Management, Inc."
+  },
+  "AAPL": {
+    "type": "equity",
+    "name": "Apple Inc."
+  },
+  "AMAT": {
+    "type": "equity",
+    "name": "APPLIED MATERIALS INC /DE"
+  },
+  "APTV": {
+    "type": "equity",
+    "name": "Aptiv PLC"
+  },
+  "ACGL": {
+    "type": "equity",
+    "name": "ARCH CAPITAL GROUP LTD."
+  },
+  "ADM": {
+    "type": "equity",
+    "name": "Archer-Daniels-Midland Co"
+  },
+  "ANET": {
+    "type": "equity",
+    "name": "Arista Networks, Inc."
+  },
+  "AJG": {
+    "type": "equity",
+    "name": "Arthur J. Gallagher & Co."
+  },
+  "AIZ": {
+    "type": "equity",
+    "name": "ASSURANT, INC."
+  },
+  "T": {
+    "type": "equity",
+    "name": "AT&T INC."
+  },
+  "ATO": {
+    "type": "equity",
+    "name": "ATMOS ENERGY CORP"
+  },
+  "ADSK": {
+    "type": "equity",
+    "name": "Autodesk, Inc."
+  },
+  "ADP": {
+    "type": "equity",
+    "name": "AUTOMATIC DATA PROCESSING INC"
+  },
+  "AZO": {
+    "type": "equity",
+    "name": "AUTOZONE INC"
+  },
+  "AVB": {
+    "type": "equity",
+    "name": "AVALONBAY COMMUNITIES INC"
+  },
+  "AVY": {
+    "type": "equity",
+    "name": "Avery Dennison Corp"
+  },
+  "AXON": {
+    "type": "equity",
+    "name": "AXON ENTERPRISE, INC."
+  },
+  "BKR": {
+    "type": "equity",
+    "name": "Baker Hughes Co"
+  },
+  "BALL": {
+    "type": "equity",
+    "name": "BALL Corp"
+  },
+  "BAC": {
+    "type": "equity",
+    "name": "BANK OF AMERICA CORP /DE/"
+  },
+  "BAX": {
+    "type": "equity",
+    "name": "BAXTER INTERNATIONAL INC"
+  },
+  "BDX": {
+    "type": "equity",
+    "name": "BECTON DICKINSON & CO"
+  },
+  "BBY": {
+    "type": "equity",
+    "name": "BEST BUY CO INC"
+  },
+  "TECH": {
+    "type": "equity",
+    "name": "BIO-TECHNE Corp"
+  },
+  "BIIB": {
+    "type": "equity",
+    "name": "BIOGEN INC."
+  },
+  "BLK": {
+    "type": "equity",
+    "name": "BlackRock, Inc."
+  },
+  "BX": {
+    "type": "equity",
+    "name": "Blackstone Inc."
+  },
+  "XYZ": {
+    "type": "equity",
+    "name": "Block, Inc."
+  },
+  "BK": {
+    "type": "equity",
+    "name": "Bank of New York Mellon Corp"
+  },
+  "BA": {
+    "type": "equity",
+    "name": "BOEING CO"
+  },
+  "BKNG": {
+    "type": "equity",
+    "name": "Booking Holdings Inc."
+  },
+  "BSX": {
+    "type": "equity",
+    "name": "BOSTON SCIENTIFIC CORP"
+  },
+  "BMY": {
+    "type": "equity",
+    "name": "BRISTOL MYERS SQUIBB CO"
+  },
+  "AVGO": {
+    "type": "equity",
+    "name": "Broadcom Inc."
+  },
+  "BR": {
+    "type": "equity",
+    "name": "BROADRIDGE FINANCIAL SOLUTIONS, INC."
+  },
+  "BRO": {
+    "type": "equity",
+    "name": "BROWN & BROWN, INC."
+  },
+  "BLDR": {
+    "type": "equity",
+    "name": "Builders FirstSource, Inc."
+  },
+  "BG": {
+    "type": "equity",
+    "name": "Bunge Global SA"
+  },
+  "BXP": {
+    "type": "equity",
+    "name": "BXP, Inc."
+  },
+  "CHRW": {
+    "type": "equity",
+    "name": "C. H. ROBINSON WORLDWIDE, INC."
+  },
+  "CDNS": {
+    "type": "equity",
+    "name": "CADENCE DESIGN SYSTEMS INC"
+  },
+  "CZR": {
+    "type": "equity",
+    "name": "Caesars Entertainment, Inc."
+  },
+  "CPT": {
+    "type": "equity",
+    "name": "CAMDEN PROPERTY TRUST"
+  },
+  "CPB": {
+    "type": "equity",
+    "name": "CAMPBELL'S Co"
+  },
+  "COF": {
+    "type": "equity",
+    "name": "CAPITAL ONE FINANCIAL CORP"
+  },
+  "CAH": {
+    "type": "equity",
+    "name": "CARDINAL HEALTH INC"
+  },
+  "KMX": {
+    "type": "equity",
+    "name": "CARMAX INC"
+  },
+  "CCL": {
+    "type": "equity",
+    "name": "CARNIVAL CORP"
+  },
+  "CARR": {
+    "type": "equity",
+    "name": "CARRIER GLOBAL Corp"
+  },
+  "CAT": {
+    "type": "equity",
+    "name": "CATERPILLAR INC"
+  },
+  "CBOE": {
+    "type": "equity",
+    "name": "Cboe Global Markets, Inc."
+  },
+  "CBRE": {
+    "type": "equity",
+    "name": "CBRE GROUP, INC."
+  },
+  "CDW": {
+    "type": "equity",
+    "name": "CDW Corp"
+  },
+  "COR": {
+    "type": "equity",
+    "name": "Cencora, Inc."
+  },
+  "CNC": {
+    "type": "equity",
+    "name": "CENTENE CORP"
+  },
+  "CNP": {
+    "type": "equity",
+    "name": "CENTERPOINT ENERGY INC"
+  },
+  "CF": {
+    "type": "equity",
+    "name": "CF Industries Holdings, Inc."
+  },
+  "CRL": {
+    "type": "equity",
+    "name": "CHARLES RIVER LABORATORIES INTERNATIONAL, INC."
+  },
+  "SCHW": {
+    "type": "equity",
+    "name": "SCHWAB CHARLES CORP"
+  },
+  "CHTR": {
+    "type": "equity",
+    "name": "CHARTER COMMUNICATIONS, INC. /MO/"
+  },
+  "CVX": {
+    "type": "equity",
+    "name": "CHEVRON CORP"
+  },
+  "CMG": {
+    "type": "equity",
+    "name": "CHIPOTLE MEXICAN GRILL INC"
+  },
+  "CB": {
+    "type": "equity",
+    "name": "Chubb Ltd"
+  },
+  "CHD": {
+    "type": "equity",
+    "name": "CHURCH & DWIGHT CO INC /DE/"
+  },
+  "CI": {
+    "type": "equity",
+    "name": "Cigna Group"
+  },
+  "CINF": {
+    "type": "equity",
+    "name": "CINCINNATI FINANCIAL CORP"
+  },
+  "CTAS": {
+    "type": "equity",
+    "name": "CINTAS CORP"
+  },
+  "CSCO": {
+    "type": "equity",
+    "name": "CISCO SYSTEMS, INC."
+  },
+  "C": {
+    "type": "equity",
+    "name": "CITIGROUP INC"
+  },
+  "CFG": {
+    "type": "equity",
+    "name": "CITIZENS FINANCIAL GROUP INC/RI"
+  },
+  "CLX": {
+    "type": "equity",
+    "name": "CLOROX CO /DE/"
+  },
+  "CME": {
+    "type": "equity",
+    "name": "CME GROUP INC."
+  },
+  "CMS": {
+    "type": "equity",
+    "name": "CMS ENERGY CORP"
+  },
+  "KO": {
+    "type": "equity",
+    "name": "COCA COLA CO"
+  },
+  "CTSH": {
+    "type": "equity",
+    "name": "COGNIZANT TECHNOLOGY SOLUTIONS CORP"
+  },
+  "COIN": {
+    "type": "equity",
+    "name": "Coinbase Global, Inc."
+  },
+  "CL": {
+    "type": "equity",
+    "name": "COLGATE PALMOLIVE CO"
+  },
+  "CMCSA": {
+    "type": "equity",
+    "name": "COMCAST CORP"
+  },
+  "CAG": {
+    "type": "equity",
+    "name": "CONAGRA BRANDS INC."
+  },
+  "COP": {
+    "type": "equity",
+    "name": "CONOCOPHILLIPS"
+  },
+  "ED": {
+    "type": "equity",
+    "name": "CONSOLIDATED EDISON INC"
+  },
+  "STZ": {
+    "type": "equity",
+    "name": "CONSTELLATION BRANDS, INC."
+  },
+  "CEG": {
+    "type": "equity",
+    "name": "Constellation Energy Corp"
+  },
+  "COO": {
+    "type": "equity",
+    "name": "COOPER COMPANIES, INC."
+  },
+  "CPRT": {
+    "type": "equity",
+    "name": "COPART INC"
+  },
+  "GLW": {
+    "type": "equity",
+    "name": "CORNING INC /NY"
+  },
+  "CPAY": {
+    "type": "equity",
+    "name": "CORPAY, INC."
+  },
+  "CTVA": {
+    "type": "equity",
+    "name": "Corteva, Inc."
+  },
+  "CSGP": {
+    "type": "equity",
+    "name": "COSTAR GROUP, INC."
+  },
+  "COST": {
+    "type": "equity",
+    "name": "COSTCO WHOLESALE CORP /NEW"
+  },
+  "CTRA": {
+    "type": "equity",
+    "name": "Coterra Energy Inc."
+  },
+  "CRWD": {
+    "type": "equity",
+    "name": "CrowdStrike Holdings, Inc."
+  },
+  "CCI": {
+    "type": "equity",
+    "name": "CROWN CASTLE INC."
+  },
+  "CSX": {
+    "type": "equity",
+    "name": "CSX CORP"
+  },
+  "CMI": {
+    "type": "equity",
+    "name": "CUMMINS INC"
+  },
+  "CVS": {
+    "type": "equity",
+    "name": "CVS HEALTH Corp"
+  },
+  "DHR": {
+    "type": "equity",
+    "name": "DANAHER CORP /DE/"
+  },
+  "DRI": {
+    "type": "equity",
+    "name": "DARDEN RESTAURANTS INC"
+  },
+  "DDOG": {
+    "type": "equity",
+    "name": "Datadog, Inc."
+  },
+  "DVA": {
+    "type": "equity",
+    "name": "DAVITA INC."
+  },
+  "DAY": {
+    "type": "equity",
+    "name": "Dayforce, Inc."
+  },
+  "DECK": {
+    "type": "equity",
+    "name": "DECKERS OUTDOOR CORP"
+  },
+  "DE": {
+    "type": "equity",
+    "name": "DEERE & CO"
+  },
+  "DELL": {
+    "type": "equity",
+    "name": "Dell Technologies Inc."
+  },
+  "DAL": {
+    "type": "equity",
+    "name": "DELTA AIR LINES, INC."
+  },
+  "DVN": {
+    "type": "equity",
+    "name": "DEVON ENERGY CORP/DE"
+  },
+  "DXCM": {
+    "type": "equity",
+    "name": "DEXCOM INC"
+  },
+  "FANG": {
+    "type": "equity",
+    "name": "Diamondback Energy, Inc."
+  },
+  "DLR": {
+    "type": "equity",
+    "name": "DIGITAL REALTY TRUST, INC."
+  },
+  "DG": {
+    "type": "equity",
+    "name": "DOLLAR GENERAL CORP"
+  },
+  "DLTR": {
+    "type": "equity",
+    "name": "DOLLAR TREE, INC."
+  },
+  "D": {
+    "type": "equity",
+    "name": "DOMINION ENERGY, INC"
+  },
+  "DPZ": {
+    "type": "equity",
+    "name": "DOMINOS PIZZA INC"
+  },
+  "DASH": {
+    "type": "equity",
+    "name": "DoorDash, Inc."
+  },
+  "DOV": {
+    "type": "equity",
+    "name": "DOVER Corp"
+  },
+  "DOW": {
+    "type": "equity",
+    "name": "DOW INC."
+  },
+  "DHI": {
+    "type": "equity",
+    "name": "HORTON D R INC /DE/"
+  },
+  "DTE": {
+    "type": "equity",
+    "name": "DTE ENERGY CO"
+  },
+  "DUK": {
+    "type": "equity",
+    "name": "Duke Energy CORP"
+  },
+  "DD": {
+    "type": "equity",
+    "name": "DuPont de Nemours, Inc."
+  },
+  "EMN": {
+    "type": "equity",
+    "name": "EASTMAN CHEMICAL CO"
+  },
+  "ETN": {
+    "type": "equity",
+    "name": "Eaton Corp plc"
+  },
+  "EBAY": {
+    "type": "equity",
+    "name": "EBAY INC"
+  },
+  "ECL": {
+    "type": "equity",
+    "name": "ECOLAB INC."
+  },
+  "EIX": {
+    "type": "equity",
+    "name": "EDISON INTERNATIONAL"
+  },
+  "EW": {
+    "type": "equity",
+    "name": "Edwards Lifesciences Corp"
+  },
+  "EA": {
+    "type": "equity",
+    "name": "ELECTRONIC ARTS INC."
+  },
+  "ELV": {
+    "type": "equity",
+    "name": "Elevance Health, Inc."
+  },
+  "EMR": {
+    "type": "equity",
+    "name": "EMERSON ELECTRIC CO"
+  },
+  "ENPH": {
+    "type": "equity",
+    "name": "Enphase Energy, Inc."
+  },
+  "ETR": {
+    "type": "equity",
+    "name": "ENTERGY CORP /DE/"
+  },
+  "EOG": {
+    "type": "equity",
+    "name": "EOG RESOURCES INC"
+  },
+  "EPAM": {
+    "type": "equity",
+    "name": "EPAM Systems, Inc."
+  },
+  "EQT": {
+    "type": "equity",
+    "name": "EQT Corp"
+  },
+  "EFX": {
+    "type": "equity",
+    "name": "EQUIFAX INC"
+  },
+  "EQIX": {
+    "type": "equity",
+    "name": "EQUINIX INC"
+  },
+  "EQR": {
+    "type": "equity",
+    "name": "EQUITY RESIDENTIAL"
+  },
+  "ERIE": {
+    "type": "equity",
+    "name": "ERIE INDEMNITY CO"
+  },
+  "ESS": {
+    "type": "equity",
+    "name": "ESSEX PROPERTY TRUST, INC."
+  },
+  "EL": {
+    "type": "equity",
+    "name": "ESTEE LAUDER COMPANIES INC"
+  },
+  "EG": {
+    "type": "equity",
+    "name": "EVEREST GROUP, LTD."
+  },
+  "EVRG": {
+    "type": "equity",
+    "name": "Evergy, Inc."
+  },
+  "ES": {
+    "type": "equity",
+    "name": "EVERSOURCE ENERGY"
+  },
+  "EXC": {
+    "type": "equity",
+    "name": "EXELON CORP"
+  },
+  "EXE": {
+    "type": "equity",
+    "name": "EXPAND ENERGY Corp"
+  },
+  "EXPE": {
+    "type": "equity",
+    "name": "Expedia Group, Inc."
+  },
+  "EXPD": {
+    "type": "equity",
+    "name": "EXPEDITORS INTERNATIONAL OF WASHINGTON INC"
+  },
+  "EXR": {
+    "type": "equity",
+    "name": "Extra Space Storage Inc."
+  },
+  "XOM": {
+    "type": "equity",
+    "name": "EXXON MOBIL CORP"
+  },
+  "FFIV": {
+    "type": "equity",
+    "name": "F5, INC."
+  },
+  "FDS": {
+    "type": "equity",
+    "name": "FACTSET RESEARCH SYSTEMS INC"
+  },
+  "FICO": {
+    "type": "equity",
+    "name": "FAIR ISAAC CORP"
+  },
+  "FAST": {
+    "type": "equity",
+    "name": "FASTENAL CO"
+  },
+  "FRT": {
+    "type": "equity",
+    "name": "FEDERAL REALTY INVESTMENT TRUST"
+  },
+  "FDX": {
+    "type": "equity",
+    "name": "FEDEX CORP"
+  },
+  "FIS": {
+    "type": "equity",
+    "name": "Fidelity National Information Services, Inc."
+  },
+  "FITB": {
+    "type": "equity",
+    "name": "FIFTH THIRD BANCORP"
+  },
+  "FSLR": {
+    "type": "equity",
+    "name": "FIRST SOLAR, INC."
+  },
+  "FE": {
+    "type": "equity",
+    "name": "FIRSTENERGY CORP"
+  },
+  "FI": {
+    "type": "equity",
+    "name": "FISERV INC"
+  },
+  "F": {
+    "type": "equity",
+    "name": "FORD MOTOR CO"
+  },
+  "FTNT": {
+    "type": "equity",
+    "name": "Fortinet, Inc."
+  },
+  "FTV": {
+    "type": "equity",
+    "name": "Fortive Corp"
+  },
+  "FOXA": {
+    "type": "equity",
+    "name": "Fox Corp"
+  },
+  "FOX": {
+    "type": "equity",
+    "name": "Fox Corp"
+  },
+  "BEN": {
+    "type": "equity",
+    "name": "FRANKLIN RESOURCES INC"
+  },
+  "FCX": {
+    "type": "equity",
+    "name": "FREEPORT-MCMORAN INC"
+  },
+  "GRMN": {
+    "type": "equity",
+    "name": "GARMIN LTD"
+  },
+  "IT": {
+    "type": "equity",
+    "name": "GARTNER INC"
+  },
+  "GE": {
+    "type": "equity",
+    "name": "GENERAL ELECTRIC CO"
+  },
+  "GEHC": {
+    "type": "equity",
+    "name": "GE HealthCare Technologies Inc."
+  },
+  "GEV": {
+    "type": "equity",
+    "name": "GE Vernova Inc."
+  },
+  "GEN": {
+    "type": "equity",
+    "name": "Gen Digital Inc."
+  },
+  "GNRC": {
+    "type": "equity",
+    "name": "GENERAC HOLDINGS INC."
+  },
+  "GD": {
+    "type": "equity",
+    "name": "GENERAL DYNAMICS CORP"
+  },
+  "GIS": {
+    "type": "equity",
+    "name": "GENERAL MILLS INC"
+  },
+  "GM": {
+    "type": "equity",
+    "name": "General Motors Co"
+  },
+  "GPC": {
+    "type": "equity",
+    "name": "GENUINE PARTS CO"
+  },
+  "GILD": {
+    "type": "equity",
+    "name": "GILEAD SCIENCES, INC."
+  },
+  "GPN": {
+    "type": "equity",
+    "name": "GLOBAL PAYMENTS INC"
+  },
+  "GL": {
+    "type": "equity",
+    "name": "GLOBE LIFE INC."
+  },
+  "GDDY": {
+    "type": "equity",
+    "name": "GoDaddy Inc."
+  },
+  "GS": {
+    "type": "equity",
+    "name": "GOLDMAN SACHS GROUP INC"
+  },
+  "HAL": {
+    "type": "equity",
+    "name": "HALLIBURTON CO"
+  },
+  "HIG": {
+    "type": "equity",
+    "name": "HARTFORD INSURANCE GROUP, INC."
+  },
+  "HAS": {
+    "type": "equity",
+    "name": "HASBRO, INC."
+  },
+  "HCA": {
+    "type": "equity",
+    "name": "HCA Healthcare, Inc."
+  },
+  "DOC": {
+    "type": "equity",
+    "name": "HEALTHPEAK PROPERTIES, INC."
+  },
+  "HSIC": {
+    "type": "equity",
+    "name": "HENRY SCHEIN INC"
+  },
+  "HSY": {
+    "type": "equity",
+    "name": "HERSHEY CO"
+  },
+  "HPE": {
+    "type": "equity",
+    "name": "Hewlett Packard Enterprise Co"
+  },
+  "HLT": {
+    "type": "equity",
+    "name": "Hilton Worldwide Holdings Inc."
+  },
+  "HOLX": {
+    "type": "equity",
+    "name": "HOLOGIC INC"
+  },
+  "HD": {
+    "type": "equity",
+    "name": "HOME DEPOT, INC."
+  },
+  "HON": {
+    "type": "equity",
+    "name": "HONEYWELL INTERNATIONAL INC"
+  },
+  "HRL": {
+    "type": "equity",
+    "name": "HORMEL FOODS CORP /DE/"
+  },
+  "HST": {
+    "type": "equity",
+    "name": "HOST HOTELS & RESORTS, INC."
+  },
+  "HWM": {
+    "type": "equity",
+    "name": "Howmet Aerospace Inc."
+  },
+  "HPQ": {
+    "type": "equity",
+    "name": "HP INC"
+  },
+  "HUBB": {
+    "type": "equity",
+    "name": "HUBBELL INC"
+  },
+  "HUM": {
+    "type": "equity",
+    "name": "HUMANA INC"
+  },
+  "HBAN": {
+    "type": "equity",
+    "name": "HUNTINGTON BANCSHARES INC /MD/"
+  },
+  "HII": {
+    "type": "equity",
+    "name": "HUNTINGTON INGALLS INDUSTRIES, INC."
+  },
+  "IBM": {
+    "type": "equity",
+    "name": "INTERNATIONAL BUSINESS MACHINES CORP"
+  },
+  "IEX": {
+    "type": "equity",
+    "name": "IDEX CORP /DE/"
+  },
+  "IDXX": {
+    "type": "equity",
+    "name": "IDEXX LABORATORIES INC /DE"
+  },
+  "ITW": {
+    "type": "equity",
+    "name": "ILLINOIS TOOL WORKS INC"
+  },
+  "INCY": {
+    "type": "equity",
+    "name": "INCYTE CORP"
+  },
+  "IR": {
+    "type": "equity",
+    "name": "Ingersoll Rand Inc."
+  },
+  "PODD": {
+    "type": "equity",
+    "name": "INSULET CORP"
+  },
+  "INTC": {
+    "type": "equity",
+    "name": "INTEL CORP"
+  },
+  "ICE": {
+    "type": "equity",
+    "name": "Intercontinental Exchange, Inc."
+  },
+  "IFF": {
+    "type": "equity",
+    "name": "INTERNATIONAL FLAVORS & FRAGRANCES INC"
+  },
+  "IP": {
+    "type": "equity",
+    "name": "INTERNATIONAL PAPER CO /NEW/"
+  },
+  "IPG": {
+    "type": "equity",
+    "name": "INTERPUBLIC GROUP OF COMPANIES, INC."
+  },
+  "INTU": {
+    "type": "equity",
+    "name": "INTUIT INC."
+  },
+  "ISRG": {
+    "type": "equity",
+    "name": "INTUITIVE SURGICAL INC"
+  },
+  "IVZ": {
+    "type": "equity",
+    "name": "Invesco Ltd."
+  },
+  "INVH": {
+    "type": "equity",
+    "name": "Invitation Homes Inc."
+  },
+  "IQV": {
+    "type": "equity",
+    "name": "IQVIA HOLDINGS INC."
+  },
+  "IRM": {
+    "type": "equity",
+    "name": "IRON MOUNTAIN INC"
+  },
+  "JBHT": {
+    "type": "equity",
+    "name": "HUNT J B TRANSPORT SERVICES INC"
+  },
+  "JBL": {
+    "type": "equity",
+    "name": "JABIL INC"
+  },
+  "JKHY": {
+    "type": "equity",
+    "name": "JACK HENRY & ASSOCIATES INC"
+  },
+  "J": {
+    "type": "equity",
+    "name": "JACOBS SOLUTIONS INC."
+  },
+  "JNJ": {
+    "type": "equity",
+    "name": "JOHNSON & JOHNSON"
+  },
+  "JCI": {
+    "type": "equity",
+    "name": "Johnson Controls International plc"
+  },
+  "JPM": {
+    "type": "equity",
+    "name": "JPMORGAN CHASE & CO"
+  },
+  "K": {
+    "type": "equity",
+    "name": "KELLANOVA"
+  },
+  "KVUE": {
+    "type": "equity",
+    "name": "Kenvue Inc."
+  },
+  "KDP": {
+    "type": "equity",
+    "name": "Keurig Dr Pepper Inc."
+  },
+  "KEY": {
+    "type": "equity",
+    "name": "KEYCORP /NEW/"
+  },
+  "KEYS": {
+    "type": "equity",
+    "name": "Keysight Technologies, Inc."
+  },
+  "KMB": {
+    "type": "equity",
+    "name": "KIMBERLY CLARK CORP"
+  },
+  "KIM": {
+    "type": "equity",
+    "name": "KIMCO REALTY CORP"
+  },
+  "KMI": {
+    "type": "equity",
+    "name": "KINDER MORGAN, INC."
+  },
+  "KKR": {
+    "type": "equity",
+    "name": "KKR & Co. Inc."
+  },
+  "KLAC": {
+    "type": "equity",
+    "name": "KLA CORP"
+  },
+  "KHC": {
+    "type": "equity",
+    "name": "Kraft Heinz Co"
+  },
+  "KR": {
+    "type": "equity",
+    "name": "KROGER CO"
+  },
+  "LHX": {
+    "type": "equity",
+    "name": "L3HARRIS TECHNOLOGIES, INC. /DE/"
+  },
+  "LH": {
+    "type": "equity",
+    "name": "LABCORP HOLDINGS INC."
+  },
+  "LRCX": {
+    "type": "equity",
+    "name": "LAM RESEARCH CORP"
+  },
+  "LW": {
+    "type": "equity",
+    "name": "Lamb Weston Holdings, Inc."
+  },
+  "LVS": {
+    "type": "equity",
+    "name": "LAS VEGAS SANDS CORP"
+  },
+  "LDOS": {
+    "type": "equity",
+    "name": "Leidos Holdings, Inc."
+  },
+  "LEN": {
+    "type": "equity",
+    "name": "LENNAR CORP /NEW/"
+  },
+  "LII": {
+    "type": "equity",
+    "name": "LENNOX INTERNATIONAL INC"
+  },
+  "LLY": {
+    "type": "equity",
+    "name": "ELI LILLY & Co"
+  },
+  "LIN": {
+    "type": "equity",
+    "name": "LINDE PLC"
+  },
+  "LYV": {
+    "type": "equity",
+    "name": "Live Nation Entertainment, Inc."
+  },
+  "LKQ": {
+    "type": "equity",
+    "name": "LKQ CORP"
+  },
+  "LMT": {
+    "type": "equity",
+    "name": "LOCKHEED MARTIN CORP"
+  },
+  "L": {
+    "type": "equity",
+    "name": "LOEWS CORP"
+  },
+  "LOW": {
+    "type": "equity",
+    "name": "LOWES COMPANIES INC"
+  },
+  "LULU": {
+    "type": "equity",
+    "name": "lululemon athletica inc."
+  },
+  "LYB": {
+    "type": "equity",
+    "name": "LyondellBasell Industries N.V."
+  },
+  "MTB": {
+    "type": "equity",
+    "name": "M&T BANK CORP"
+  },
+  "MPC": {
+    "type": "equity",
+    "name": "Marathon Petroleum Corp"
+  },
+  "MKTX": {
+    "type": "equity",
+    "name": "MARKETAXESS HOLDINGS INC"
+  },
+  "MAR": {
+    "type": "equity",
+    "name": "MARRIOTT INTERNATIONAL INC /MD/"
+  },
+  "MMC": {
+    "type": "equity",
+    "name": "MARSH & MCLENNAN COMPANIES, INC."
+  },
+  "MLM": {
+    "type": "equity",
+    "name": "MARTIN MARIETTA MATERIALS INC"
+  },
+  "MAS": {
+    "type": "equity",
+    "name": "MASCO CORP /DE/"
+  },
+  "MA": {
+    "type": "equity",
+    "name": "Mastercard Inc"
+  },
+  "MTCH": {
+    "type": "equity",
+    "name": "Match Group, Inc."
+  },
+  "MKC": {
+    "type": "equity",
+    "name": "MCCORMICK & CO INC"
+  },
+  "MCD": {
+    "type": "equity",
+    "name": "MCDONALDS CORP"
+  },
+  "MCK": {
+    "type": "equity",
+    "name": "MCKESSON CORP"
+  },
+  "MDT": {
+    "type": "equity",
+    "name": "Medtronic plc"
+  },
+  "MRK": {
+    "type": "equity",
+    "name": "Merck & Co., Inc."
+  },
+  "META": {
+    "type": "equity",
+    "name": "Meta Platforms, Inc."
+  },
+  "MET": {
+    "type": "equity",
+    "name": "METLIFE INC"
+  },
+  "MTD": {
+    "type": "equity",
+    "name": "METTLER TOLEDO INTERNATIONAL INC/"
+  },
+  "MGM": {
+    "type": "equity",
+    "name": "MGM Resorts International"
+  },
+  "MCHP": {
+    "type": "equity",
+    "name": "MICROCHIP TECHNOLOGY INC"
+  },
+  "MU": {
+    "type": "equity",
+    "name": "MICRON TECHNOLOGY INC"
+  },
+  "MSFT": {
+    "type": "equity",
+    "name": "MICROSOFT CORP"
+  },
+  "MAA": {
+    "type": "equity",
+    "name": "MID AMERICA APARTMENT COMMUNITIES INC."
+  },
+  "MRNA": {
+    "type": "equity",
+    "name": "Moderna, Inc."
+  },
+  "MHK": {
+    "type": "equity",
+    "name": "MOHAWK INDUSTRIES INC"
+  },
+  "MOH": {
+    "type": "equity",
+    "name": "MOLINA HEALTHCARE, INC."
+  },
+  "TAP": {
+    "type": "equity",
+    "name": "MOLSON COORS BEVERAGE CO"
+  },
+  "MDLZ": {
+    "type": "equity",
+    "name": "Mondelez International, Inc."
+  },
+  "MPWR": {
+    "type": "equity",
+    "name": "MONOLITHIC POWER SYSTEMS INC"
+  },
+  "MNST": {
+    "type": "equity",
+    "name": "Monster Beverage Corp"
+  },
+  "MCO": {
+    "type": "equity",
+    "name": "MOODYS CORP /DE/"
+  },
+  "MS": {
+    "type": "equity",
+    "name": "MORGAN STANLEY"
+  },
+  "MOS": {
+    "type": "equity",
+    "name": "MOSAIC CO"
+  },
+  "MSI": {
+    "type": "equity",
+    "name": "Motorola Solutions, Inc."
+  },
+  "MSCI": {
+    "type": "equity",
+    "name": "MSCI Inc."
+  },
+  "NDAQ": {
+    "type": "equity",
+    "name": "NASDAQ, INC."
+  },
+  "NTAP": {
+    "type": "equity",
+    "name": "NetApp, Inc."
+  },
+  "NFLX": {
+    "type": "equity",
+    "name": "NETFLIX INC"
+  },
+  "NEM": {
+    "type": "equity",
+    "name": "NEWMONT Corp /DE/"
+  },
+  "NWSA": {
+    "type": "equity",
+    "name": "NEWS CORP"
+  },
+  "NWS": {
+    "type": "equity",
+    "name": "NEWS CORP"
+  },
+  "NEE": {
+    "type": "equity",
+    "name": "NEXTERA ENERGY INC"
+  },
+  "NKE": {
+    "type": "equity",
+    "name": "NIKE, Inc."
+  },
+  "NI": {
+    "type": "equity",
+    "name": "NISOURCE INC."
+  },
+  "NDSN": {
+    "type": "equity",
+    "name": "NORDSON CORP"
+  },
+  "NSC": {
+    "type": "equity",
+    "name": "NORFOLK SOUTHERN CORP"
+  },
+  "NTRS": {
+    "type": "equity",
+    "name": "NORTHERN TRUST CORP"
+  },
+  "NOC": {
+    "type": "equity",
+    "name": "NORTHROP GRUMMAN CORP /DE/"
+  },
+  "NCLH": {
+    "type": "equity",
+    "name": "Norwegian Cruise Line Holdings Ltd."
+  },
+  "NRG": {
+    "type": "equity",
+    "name": "NRG ENERGY, INC."
+  },
+  "NUE": {
+    "type": "equity",
+    "name": "NUCOR CORP"
+  },
+  "NVDA": {
+    "type": "equity",
+    "name": "NVIDIA CORP"
+  },
+  "NVR": {
+    "type": "equity",
+    "name": "NVR INC"
+  },
+  "NXPI": {
+    "type": "equity",
+    "name": "NXP Semiconductors N.V."
+  },
+  "ORLY": {
+    "type": "equity",
+    "name": "O REILLY AUTOMOTIVE INC"
+  },
+  "OXY": {
+    "type": "equity",
+    "name": "OCCIDENTAL PETROLEUM CORP /DE/"
+  },
+  "ODFL": {
+    "type": "equity",
+    "name": "OLD DOMINION FREIGHT LINE, INC."
+  },
+  "OMC": {
+    "type": "equity",
+    "name": "OMNICOM GROUP INC."
+  },
+  "ON": {
+    "type": "equity",
+    "name": "ON SEMICONDUCTOR CORP"
+  },
+  "OKE": {
+    "type": "equity",
+    "name": "ONEOK INC /NEW/"
+  },
+  "ORCL": {
+    "type": "equity",
+    "name": "ORACLE CORP"
+  },
+  "OTIS": {
+    "type": "equity",
+    "name": "Otis Worldwide Corp"
+  },
+  "PCAR": {
+    "type": "equity",
+    "name": "PACCAR INC"
+  },
+  "PKG": {
+    "type": "equity",
+    "name": "PACKAGING CORP OF AMERICA"
+  },
+  "PLTR": {
+    "type": "equity",
+    "name": "Palantir Technologies Inc."
+  },
+  "PANW": {
+    "type": "equity",
+    "name": "Palo Alto Networks Inc"
+  },
+  "PSKY": {
+    "type": "equity",
+    "name": "Paramount Skydance Corp"
+  },
+  "PH": {
+    "type": "equity",
+    "name": "Parker-Hannifin Corp"
+  },
+  "PAYX": {
+    "type": "equity",
+    "name": "PAYCHEX INC"
+  },
+  "PAYC": {
+    "type": "equity",
+    "name": "Paycom Software, Inc."
+  },
+  "PYPL": {
+    "type": "equity",
+    "name": "PayPal Holdings, Inc."
+  },
+  "PNR": {
+    "type": "equity",
+    "name": "PENTAIR plc"
+  },
+  "PEP": {
+    "type": "equity",
+    "name": "PEPSICO INC"
+  },
+  "PFE": {
+    "type": "equity",
+    "name": "PFIZER INC"
+  },
+  "PCG": {
+    "type": "equity",
+    "name": "PG&E Corp"
+  },
+  "PM": {
+    "type": "equity",
+    "name": "Philip Morris International Inc."
+  },
+  "PSX": {
+    "type": "equity",
+    "name": "Phillips 66"
+  },
+  "PNW": {
+    "type": "equity",
+    "name": "PINNACLE WEST CAPITAL CORP"
+  },
+  "PNC": {
+    "type": "equity",
+    "name": "PNC FINANCIAL SERVICES GROUP, INC."
+  },
+  "POOL": {
+    "type": "equity",
+    "name": "POOL CORP"
+  },
+  "PPG": {
+    "type": "equity",
+    "name": "PPG INDUSTRIES INC"
+  },
+  "PPL": {
+    "type": "equity",
+    "name": "PPL Corp"
+  },
+  "PFG": {
+    "type": "equity",
+    "name": "PRINCIPAL FINANCIAL GROUP INC"
+  },
+  "PG": {
+    "type": "equity",
+    "name": "PROCTER & GAMBLE Co"
+  },
+  "PGR": {
+    "type": "equity",
+    "name": "PROGRESSIVE CORP/OH/"
+  },
+  "PLD": {
+    "type": "equity",
+    "name": "Prologis, Inc."
+  },
+  "PRU": {
+    "type": "equity",
+    "name": "PRUDENTIAL FINANCIAL INC"
+  },
+  "PEG": {
+    "type": "equity",
+    "name": "PUBLIC SERVICE ENTERPRISE GROUP INC"
+  },
+  "PTC": {
+    "type": "equity",
+    "name": "PTC INC."
+  },
+  "PSA": {
+    "type": "equity",
+    "name": "Public Storage"
+  },
+  "PHM": {
+    "type": "equity",
+    "name": "PULTEGROUP INC/MI/"
+  },
+  "PWR": {
+    "type": "equity",
+    "name": "QUANTA SERVICES, INC."
+  },
+  "QCOM": {
+    "type": "equity",
+    "name": "QUALCOMM INC/DE"
+  },
+  "DGX": {
+    "type": "equity",
+    "name": "QUEST DIAGNOSTICS INC"
+  },
+  "RL": {
+    "type": "equity",
+    "name": "RALPH LAUREN CORP"
+  },
+  "RJF": {
+    "type": "equity",
+    "name": "RAYMOND JAMES FINANCIAL INC"
+  },
+  "RTX": {
+    "type": "equity",
+    "name": "RTX Corp"
+  },
+  "O": {
+    "type": "equity",
+    "name": "REALTY INCOME CORP"
+  },
+  "REG": {
+    "type": "equity",
+    "name": "REGENCY CENTERS CORP"
+  },
+  "REGN": {
+    "type": "equity",
+    "name": "REGENERON PHARMACEUTICALS, INC."
+  },
+  "RF": {
+    "type": "equity",
+    "name": "REGIONS FINANCIAL CORP"
+  },
+  "RSG": {
+    "type": "equity",
+    "name": "REPUBLIC SERVICES, INC."
+  },
+  "RMD": {
+    "type": "equity",
+    "name": "RESMED INC"
+  },
+  "RVTY": {
+    "type": "equity",
+    "name": "REVVITY, INC."
+  },
+  "ROK": {
+    "type": "equity",
+    "name": "ROCKWELL AUTOMATION, INC"
+  },
+  "ROL": {
+    "type": "equity",
+    "name": "ROLLINS INC"
+  },
+  "ROP": {
+    "type": "equity",
+    "name": "ROPER TECHNOLOGIES INC"
+  },
+  "ROST": {
+    "type": "equity",
+    "name": "ROSS STORES, INC."
+  },
+  "RCL": {
+    "type": "equity",
+    "name": "ROYAL CARIBBEAN CRUISES LTD"
+  },
+  "SPGI": {
+    "type": "equity",
+    "name": "S&P Global Inc."
+  },
+  "CRM": {
+    "type": "equity",
+    "name": "Salesforce, Inc."
+  },
+  "SBAC": {
+    "type": "equity",
+    "name": "SBA COMMUNICATIONS CORP"
+  },
+  "SLB": {
+    "type": "equity",
+    "name": "SCHLUMBERGER LIMITED/NV"
+  },
+  "STX": {
+    "type": "equity",
+    "name": "Seagate Technology Holdings plc"
+  },
+  "SRE": {
+    "type": "equity",
+    "name": "SEMPRA"
+  },
+  "NOW": {
+    "type": "equity",
+    "name": "ServiceNow, Inc."
+  },
+  "SHW": {
+    "type": "equity",
+    "name": "SHERWIN WILLIAMS CO"
+  },
+  "SPG": {
+    "type": "equity",
+    "name": "SIMON PROPERTY GROUP INC /DE/"
+  },
+  "SWKS": {
+    "type": "equity",
+    "name": "SKYWORKS SOLUTIONS, INC."
+  },
+  "SJM": {
+    "type": "equity",
+    "name": "J M SMUCKER Co"
+  },
+  "SW": {
+    "type": "equity",
+    "name": "Smurfit Westrock plc"
+  },
+  "SNA": {
+    "type": "equity",
+    "name": "Snap-on Inc"
+  },
+  "SOLV": {
+    "type": "equity",
+    "name": "Solventum Corp"
+  },
+  "SO": {
+    "type": "equity",
+    "name": "SOUTHERN CO"
+  },
+  "LUV": {
+    "type": "equity",
+    "name": "SOUTHWEST AIRLINES CO"
+  },
+  "SWK": {
+    "type": "equity",
+    "name": "STANLEY BLACK & DECKER, INC."
+  },
+  "SBUX": {
+    "type": "equity",
+    "name": "STARBUCKS CORP"
+  },
+  "STT": {
+    "type": "equity",
+    "name": "STATE STREET CORP"
+  },
+  "STLD": {
+    "type": "equity",
+    "name": "STEEL DYNAMICS INC"
+  },
+  "STE": {
+    "type": "equity",
+    "name": "STERIS plc"
+  },
+  "SYK": {
+    "type": "equity",
+    "name": "STRYKER CORP"
+  },
+  "SMCI": {
+    "type": "equity",
+    "name": "Super Micro Computer, Inc."
+  },
+  "SYF": {
+    "type": "equity",
+    "name": "Synchrony Financial"
+  },
+  "SNPS": {
+    "type": "equity",
+    "name": "SYNOPSYS INC"
+  },
+  "SYY": {
+    "type": "equity",
+    "name": "SYSCO CORP"
+  },
+  "TMUS": {
+    "type": "equity",
+    "name": "T-Mobile US, Inc."
+  },
+  "TROW": {
+    "type": "equity",
+    "name": "PRICE T ROWE GROUP INC"
+  },
+  "TTWO": {
+    "type": "equity",
+    "name": "TAKE TWO INTERACTIVE SOFTWARE INC"
+  },
+  "TPR": {
+    "type": "equity",
+    "name": "TAPESTRY, INC."
+  },
+  "TRGP": {
+    "type": "equity",
+    "name": "Targa Resources Corp."
+  },
+  "TGT": {
+    "type": "equity",
+    "name": "TARGET CORP"
+  },
+  "TEL": {
+    "type": "equity",
+    "name": "TE Connectivity plc"
+  },
+  "TDY": {
+    "type": "equity",
+    "name": "TELEDYNE TECHNOLOGIES INC"
+  },
+  "TER": {
+    "type": "equity",
+    "name": "TERADYNE, INC"
+  },
+  "TSLA": {
+    "type": "equity",
+    "name": "Tesla, Inc."
+  },
+  "TXN": {
+    "type": "equity",
+    "name": "TEXAS INSTRUMENTS INC"
+  },
+  "TPL": {
+    "type": "equity",
+    "name": "Texas Pacific Land Corp"
+  },
+  "TXT": {
+    "type": "equity",
+    "name": "TEXTRON INC"
+  },
+  "TMO": {
+    "type": "equity",
+    "name": "THERMO FISHER SCIENTIFIC INC."
+  },
+  "TJX": {
+    "type": "equity",
+    "name": "TJX COMPANIES INC /DE/"
+  },
+  "TKO": {
+    "type": "equity",
+    "name": "TKO Group Holdings, Inc."
+  },
+  "TTD": {
+    "type": "equity",
+    "name": "Trade Desk, Inc."
+  },
+  "TSCO": {
+    "type": "equity",
+    "name": "TRACTOR SUPPLY CO /DE/"
+  },
+  "TT": {
+    "type": "equity",
+    "name": "Trane Technologies plc"
+  },
+  "TDG": {
+    "type": "equity",
+    "name": "TransDigm Group INC"
+  },
+  "TRV": {
+    "type": "equity",
+    "name": "TRAVELERS COMPANIES, INC."
+  },
+  "TRMB": {
+    "type": "equity",
+    "name": "TRIMBLE INC."
+  },
+  "TFC": {
+    "type": "equity",
+    "name": "TRUIST FINANCIAL CORP"
+  },
+  "TYL": {
+    "type": "equity",
+    "name": "TYLER TECHNOLOGIES INC"
+  },
+  "TSN": {
+    "type": "equity",
+    "name": "TYSON FOODS, INC."
+  },
+  "USB": {
+    "type": "equity",
+    "name": "US BANCORP \\DE\\"
+  },
+  "UBER": {
+    "type": "equity",
+    "name": "Uber Technologies, Inc"
+  },
+  "UDR": {
+    "type": "equity",
+    "name": "UDR, Inc."
+  },
+  "ULTA": {
+    "type": "equity",
+    "name": "Ulta Beauty, Inc."
+  },
+  "UNP": {
+    "type": "equity",
+    "name": "UNION PACIFIC CORP"
+  },
+  "UAL": {
+    "type": "equity",
+    "name": "United Airlines Holdings, Inc."
+  },
+  "UPS": {
+    "type": "equity",
+    "name": "UNITED PARCEL SERVICE INC"
+  },
+  "URI": {
+    "type": "equity",
+    "name": "UNITED RENTALS, INC."
+  },
+  "UNH": {
+    "type": "equity",
+    "name": "UNITEDHEALTH GROUP INC"
+  },
+  "UHS": {
+    "type": "equity",
+    "name": "UNIVERSAL HEALTH SERVICES INC"
+  },
+  "VLO": {
+    "type": "equity",
+    "name": "VALERO ENERGY CORP/TX"
+  },
+  "VTR": {
+    "type": "equity",
+    "name": "Ventas, Inc."
+  },
+  "VLTO": {
+    "type": "equity",
+    "name": "Veralto Corp"
+  },
+  "VRSN": {
+    "type": "equity",
+    "name": "VERISIGN INC/CA"
+  },
+  "VRSK": {
+    "type": "equity",
+    "name": "Verisk Analytics, Inc."
+  },
+  "VZ": {
+    "type": "equity",
+    "name": "VERIZON COMMUNICATIONS INC"
+  },
+  "VRTX": {
+    "type": "equity",
+    "name": "VERTEX PHARMACEUTICALS INC / MA"
+  },
+  "VTRS": {
+    "type": "equity",
+    "name": "Viatris Inc"
+  },
+  "VICI": {
+    "type": "equity",
+    "name": "VICI PROPERTIES INC."
+  },
+  "V": {
+    "type": "equity",
+    "name": "VISA INC."
+  },
+  "VST": {
+    "type": "equity",
+    "name": "Vistra Corp."
+  },
+  "VMC": {
+    "type": "equity",
+    "name": "Vulcan Materials CO"
+  },
+  "WRB": {
+    "type": "equity",
+    "name": "BERKLEY W R CORP"
+  },
+  "GWW": {
+    "type": "equity",
+    "name": "W.W. GRAINGER, INC."
+  },
+  "WAB": {
+    "type": "equity",
+    "name": "WESTINGHOUSE AIR BRAKE TECHNOLOGIES CORP"
+  },
+  "WMT": {
+    "type": "equity",
+    "name": "Walmart Inc."
+  },
+  "DIS": {
+    "type": "equity",
+    "name": "Walt Disney Co"
+  },
+  "WBD": {
+    "type": "equity",
+    "name": "Warner Bros. Discovery, Inc."
+  },
+  "WM": {
+    "type": "equity",
+    "name": "WASTE MANAGEMENT INC"
+  },
+  "WAT": {
+    "type": "equity",
+    "name": "WATERS CORP /DE/"
+  },
+  "WEC": {
+    "type": "equity",
+    "name": "WEC ENERGY GROUP, INC."
+  },
+  "WFC": {
+    "type": "equity",
+    "name": "WELLS FARGO & COMPANY/MN"
+  },
+  "WELL": {
+    "type": "equity",
+    "name": "WELLTOWER INC."
+  },
+  "WST": {
+    "type": "equity",
+    "name": "WEST PHARMACEUTICAL SERVICES INC"
+  },
+  "WDC": {
+    "type": "equity",
+    "name": "WESTERN DIGITAL CORP"
+  },
+  "WY": {
+    "type": "equity",
+    "name": "WEYERHAEUSER CO"
+  },
+  "WSM": {
+    "type": "equity",
+    "name": "WILLIAMS SONOMA INC"
+  },
+  "WMB": {
+    "type": "equity",
+    "name": "WILLIAMS COMPANIES, INC."
+  },
+  "WTW": {
+    "type": "equity",
+    "name": "WILLIS TOWERS WATSON PLC"
+  },
+  "WDAY": {
+    "type": "equity",
+    "name": "Workday, Inc."
+  },
+  "WYNN": {
+    "type": "equity",
+    "name": "WYNN RESORTS LTD"
+  },
+  "XEL": {
+    "type": "equity",
+    "name": "XCEL ENERGY INC"
+  },
+  "XYL": {
+    "type": "equity",
+    "name": "Xylem Inc."
+  },
+  "YUM": {
+    "type": "equity",
+    "name": "YUM BRANDS INC"
+  },
+  "ZBRA": {
+    "type": "equity",
+    "name": "ZEBRA TECHNOLOGIES CORP"
+  },
+  "ZBH": {
+    "type": "equity",
+    "name": "ZIMMER BIOMET HOLDINGS, INC."
+  },
+  "ZTS": {
+    "type": "equity",
+    "name": "Zoetis Inc."
+  }
+}
