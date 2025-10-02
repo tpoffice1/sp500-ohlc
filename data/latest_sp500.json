@@ -1,1 +1,6 @@
+[
+  { "symbol": "AAPL", "name": "Apple Inc.", "date": "2025-10-01", "close": 227.35, "prevClose": 226.42 },
+  { "symbol": "MSFT", "name": "Microsoft Corp.", "date": "2025-10-01", "close": 421.76, "prevClose": 420.10 },
+  { "symbol": "AMZN", "name": "Amazon.com Inc.", "date": "2025-10-01", "close": 194.21, "prevClose": 193.88 }
+]
 
