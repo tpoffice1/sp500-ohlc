@@ -3,3 +3,5 @@ pandas>=2.0
 numpy>=1.25
 python-dateutil>=2.8
 lxml
+boto3==1.34.162
+python-dotenv==1.0.1
