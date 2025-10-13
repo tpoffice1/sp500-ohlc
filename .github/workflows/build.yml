@@ -1,15 +1,15 @@
-name: Build & Deploy Tickers
+name: Build & Publish OHLC
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '15 22 * * 1-5'  # optional: weekdays at 22:15 UTC
+  schedule:
+    - cron: "15 2 * * *"   # daily 02:15 UTC (adjust as you like)
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  build_publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,21 +19,24 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install pandas requests
-          fi
+          pip install -r requirements.txt
 
-      # === Build OHLC data (writes data/yesterday.json, data/latest.csv, raw/*.csv) ===
-      # Change this command if your repo uses a different entrypoint.
+      # If you only have tickers.txt, copy it to tickers.csv for the uploader
+      - name: Ensure tickers.csv exists
+        run: |
+          if [ ! -f tickers.csv ] && [ -f tickers.txt ]; then
+            cp tickers.txt tickers.csv
+          fi
+          test -f tickers.csv && (echo "tickers.csv preview:"; head -5 tickers.csv) || echo "tickers.csv not found (OK if your builder doesn't need it)"
+
+      # === Build OHLC data (your existing process) ===
       - name: Build OHLC artifacts
         run: |
           set -e
@@ -42,27 +45,15 @@ jobs:
           ls -lah data | sed 's/^/  /'
           [ -f data/yesterday.json ] && jq -r '.[0] | keys | @csv' data/yesterday.json || true
 
-      - name: Upload data artifacts (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: data-out
-          path: |
-            data/yesterday.json
-            data/latest.csv
-            data/raw/*.csv
-          if-no-files-found: ignore
-          retention-days: 3
-
-      # === Build names & logos (ticker_meta.json) ===
-      # NOTE: We do NOT pass FMP_API_KEY here. The script will use the SEC fallback only.
-      - name: Build ticker_meta.json (names only via SEC; no FMP)
+      # Build names & logos (ticker_meta.json) using your existing script
+      - name: Build ticker_meta.json (names via SEC; no FMP)
         run: |
           set -e
           python scripts/build_ticker_meta.py
           echo "Preview ticker_meta.json:"
           head -n 40 data/ticker_meta.json || true
 
-      # Commit outputs back to repo (only if there are changes)
+      # Commit outputs back to repo (unchanged from your pipeline)
       - name: Commit & push outputs
         run: |
           set -e
@@ -76,9 +67,25 @@ jobs:
             git push origin HEAD:${{ github.ref_name }}
           fi
 
-      # === Deploy to your site over plain FTP ===
-      # Requires secrets: FTP_HOST, FTP_USER, FTP_PASS, FTP_ROOT
-      - name: Deploy tickers + meta via FTP
+      # === Publish to Cloudflare R2 (host-independent) ===
+      # upload_r2_tickers.py:
+      #  - writes per-ticker stubs to R2: ohlc/<SYMBOL>.json
+      #  - writes aggregate: ohlc/latest_sp500.json  (array of rows for WP table)
+      - name: Upload OHLC to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE: ${{ secrets.R2_PUBLIC_BASE }} # optional
+        run: |
+          set -e
+          python upload_r2_tickers.py
+
+      # === Optional: keep old FTP deploy (runs only if FTP_* secrets exist) ===
+      - name: Deploy tickers + meta via FTP (optional)
+        if: ${{ secrets.FTP_HOST && secrets.FTP_USER && secrets.FTP_PASS && secrets.FTP_ROOT }}
         shell: bash
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -90,13 +97,11 @@ jobs:
           BASE="${FTP_ROOT%/}/wp-content/uploads/data"
           echo "Uploading to ftp://${FTP_HOST}${BASE}"
 
-          # Upload tickers.json (from yesterday.json)
           curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
             -T ./data/yesterday.json \
             --user "${FTP_USER}:${FTP_PASS}" \
             "ftp://${FTP_HOST}${BASE}/tickers.json"
 
-          # Upload names (ticker_meta.json)
           curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
             -T ./data/ticker_meta.json \
             --user "${FTP_USER}:${FTP_PASS}" \
