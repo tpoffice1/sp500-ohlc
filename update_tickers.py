@@ -1,105 +1,102 @@
-"""
-update_tickers.py
-Fetch daily OHLC for S&P 500 tickers, carry forward last-known values for failures,
-and write data/latest_sp500.json + data/failed_tickers.txt
-"""
+# update_tickers.py — fast, batched, threaded; merges names
 from __future__ import annotations
-import json, time, warnings
-from datetime import datetime
+import json, math
 from pathlib import Path
 import yfinance as yf
 import pandas as pd
 
-# quiet noisy warnings
-warnings.simplefilter("ignore", FutureWarning)
-pd.options.mode.copy_on_write = True
-
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "data"
-DATA_DIR.mkdir(exist_ok=True)
-TICKERS_FILE = ROOT / "tickers.txt"
-OUT_JSON = DATA_DIR / "latest_sp500.json"
-FAILED_TXT = DATA_DIR / "failed_tickers.txt"
+DATA = ROOT / "data"
+DATA.mkdir(exist_ok=True)
+TICKERS_TXT = ROOT / "tickers.txt"
+META_JSON = DATA / "ticker_meta.json"        # built by scripts/build_ticker_meta.py
+OUT_JSON = DATA / "latest_sp500.json"
 
-def to_float(x):
-    try:
-        if hasattr(x, "item"): x = x.item()
-        return round(float(x), 2)
-    except Exception:
-        return None
+def load_tickers() -> list[str]:
+    return [t.strip() for t in TICKERS_TXT.read_text().splitlines() if t.strip()]
 
-def to_int(x):
-    try:
-        if hasattr(x, "item"): x = x.item()
-        return int(x)
-    except Exception:
-        return None
+def load_names() -> dict[str,str]:
+    names = {}
+    if META_JSON.exists():
+        try:
+            meta = json.loads(META_JSON.read_text())
+            # expect [{"symbol":"AAPL","name":"Apple Inc."}, ...]
+            for r in meta:
+                s = (r.get("symbol") or "").upper()
+                n = r.get("name")
+                if s and n:
+                    names[s] = n
+        except Exception:
+            pass
+    return names
 
-def fetch_one(tkr: str):
-    t = yf.Ticker(tkr)
-    df = t.history(period="5d", auto_adjust=False, actions=False)
-    if df is None or df.empty:
-        return None
-    row = df.iloc[-1]
-    # Note: no name lookup here; you can merge names later if you like
+def pack_row(sym, row) -> dict:
+    # row is a Pandas Series for that date
+    def f(x):
+        try: return None if pd.isna(x) else round(float(x), 2)
+        except Exception: return None
+    def i(x):
+        try: return None if pd.isna(x) else int(x)
+        except Exception: return None
     return {
-        "symbol": tkr,
-        "name": None,
-        "open":  to_float(row.get("Open")),
-        "high":  to_float(row.get("High")),
-        "low":   to_float(row.get("Low")),
-        "close": to_float(row.get("Close")),
-        "volume": to_int(row.get("Volume")),
-        "date": str(getattr(df.index[-1], "date", lambda: df.index[-1])()),
+        "symbol": sym,
+        "name": None,  # filled after merge
+        "open":  f(row.get("Open")),
+        "high":  f(row.get("High")),
+        "low":   f(row.get("Low")),
+        "close": f(row.get("Close")),
+        "volume": i(row.get("Volume")),
+        "date":  str(getattr(row.name, "date", lambda: row.name)()),
     }
 
-# load tickers
-if not TICKERS_FILE.exists():
-    raise SystemExit("tickers.txt not found")
-tickers = [t.strip() for t in TICKERS_FILE.read_text().splitlines() if t.strip()]
-print(f"[i] Loaded {len(tickers)} tickers")
+def main():
+    tickers = load_tickers()
+    names = load_names()
+    print(f"[i] Loaded {len(tickers)} tickers; {len(names)} names available")
 
-# load last-known (for carry-forward)
-last_known = {}
-if OUT_JSON.exists():
-    try:
-        for r in json.loads(OUT_JSON.read_text()):
-            last_known[r["symbol"]] = r
-        print(f"[i] Loaded {len(last_known)} last-known rows for carry-forward")
-    except Exception:
-        pass
+    # Batch to avoid giant single call; 80–120 per batch works well on Actions
+    BATCH = 100
+    out: list[dict] = []
+    for bi in range(0, len(tickers), BATCH):
+        batch = tickers[bi:bi+BATCH]
+        print(f"[+] Batch {bi//BATCH+1}/{math.ceil(len(tickers)/BATCH)}: {len(batch)} tickers")
 
-results, failed = [], []
-ok = skip = 0
+        # Multi-download, threaded; 5d period ensures a recent trading day
+        df = yf.download(
+            tickers=" ".join(batch),
+            period="5d",
+            auto_adjust=False,
+            progress=False,
+            group_by="ticker",
+            threads=True
+        )
 
-for i, tkr in enumerate(tickers, 1):
-    rec = None
-    try:
-        rec = fetch_one(tkr)
-    except Exception as e:
-        print(f"[!] {tkr}: {e}")
-
-    if rec:
-        results.append(rec)
-        ok += 1
-    else:
-        # if we have last-known data, carry it forward with same structure
-        if tkr in last_known:
-            carry = dict(last_known[tkr])
-            # don’t override the date/close if truly stale; leave as-is
-            results.append(carry)
-            skip += 1
+        # yfinance returns either a MultiIndex (Ticker, Field, Date) or per-ticker frames
+        if isinstance(df.columns, pd.MultiIndex):
+            # MultiIndex: columns like (AAPL, Open) ...
+            for sym in batch:
+                try:
+                    sub = df[sym].dropna(how="all")
+                    if sub.empty: continue
+                    row = sub.iloc[-1]
+                    out.append(pack_row(sym, row))
+                except Exception:
+                    continue
         else:
-            failed.append(tkr)
+            # Single ticker frame fallback (rare in multi-call, but safe)
+            if df.empty:
+                continue
+            row = df.iloc[-1]
+            # We can’t know which symbol; skip to be safe in this fallback
+            continue
 
-    if i % 25 == 0 or i == len(tickers):
-        print(f"[+] {i}/{len(tickers)} processed (ok={ok}, carry={skip}, failed={len(failed)})")
+    # merge names
+    for r in out:
+        if not r.get("name"):
+            r["name"] = names.get(r["symbol"])
 
-    time.sleep(0.25)  # polite throttle
+    OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    print(f"[✓] Wrote {len(out)} rows → {OUT_JSON}")
 
-# persist outputs
-OUT_JSON.write_text(json.dumps(results, ensure_ascii=False, indent=2))
-FAILED_TXT.write_text("\n".join(failed) + ("\n" if failed else ""))
-
-print(f"[✓] Wrote {len(results)} rows to {OUT_JSON.name} at {datetime.utcnow().isoformat()}Z")
-print(f"[i] carry-forward: {skip}, failed today: {len(failed)} (saved to {FAILED_TXT.name})")
+if __name__ == "__main__":
+    main()
