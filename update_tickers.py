@@ -1,57 +1,60 @@
 """
 update_tickers.py
-Fetches daily OHLC data for all S&P 500 tickers and writes latest_sp500.json.
+Fetches latest OHLC data for S&P 500 tickers and writes latest_sp500.json
 """
 
-import pandas as pd
 import yfinance as yf
-import json
-import time
+import json, time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# Paths
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 TICKERS_FILE = Path("tickers.txt")
 OUTPUT_JSON = DATA_DIR / "latest_sp500.json"
 
-# Load tickers
 with open(TICKERS_FILE) as f:
     tickers = [t.strip() for t in f if t.strip()]
 
 print(f"[i] Loaded {len(tickers)} tickers")
 
-# Fetch latest OHLC for each ticker
 records = []
-start = (datetime.utcnow() - timedelta(days=10)).strftime("%Y-%m-%d")
-end = datetime.utcnow().strftime("%Y-%m-%d")
+success, failed = 0, 0
+start_date = (datetime.utcnow() - timedelta(days=5)).strftime("%Y-%m-%d")
+end_date = datetime.utcnow().strftime("%Y-%m-%d")
 
-for i, ticker in enumerate(tickers, 1):
+for i, tkr in enumerate(tickers, 1):
     try:
-        df = yf.download(ticker, start=start, end=end, progress=False)
+        df = yf.download(tkr, start=start_date, end=end_date, progress=False)
         if df.empty:
-            print(f"[-] No data for {ticker}")
+            print(f"[-] No data for {tkr}")
+            failed += 1
             continue
-        last_row = df.iloc[-1]
-        records.append({
-            "symbol": ticker,
-            "name": None,
-            "open": round(float(last_row["Open"]), 2),
-            "high": round(float(last_row["High"]), 2),
-            "low": round(float(last_row["Low"]), 2),
-            "close": round(float(last_row["Close"]), 2),
-            "volume": int(last_row["Volume"]),
-            "date": str(df.index[-1].date())
-        })
-        if i % 25 == 0:
-            print(f"[+] Processed {i}/{len(tickers)} tickers")
-        time.sleep(0.5)  # throttle to avoid rate limit
-    except Exception as e:
-        print(f"[!] Error fetching {ticker}: {e}")
 
-# Save to JSON
+        last = df.iloc[-1]
+        rec = {
+            "symbol": tkr,
+            "name": None,
+            "open": round(float(last['Open']), 2),
+            "high": round(float(last['High']), 2),
+            "low": round(float(last['Low']), 2),
+            "close": round(float(last['Close']), 2),
+            "volume": int(last['Volume']),
+            "date": str(df.index[-1].date())
+        }
+        records.append(rec)
+        success += 1
+
+        if i % 25 == 0 or i == len(tickers):
+            print(f"[+] {i}/{len(tickers)} processed ({success} OK, {failed} failed)")
+
+        time.sleep(0.4)  # polite throttle
+    except Exception as e:
+        print(f"[!] Error fetching {tkr}: {e}")
+        failed += 1
+        continue
+
 with open(OUTPUT_JSON, "w") as f:
     json.dump(records, f, indent=2)
 
-print(f"[✓] Wrote {len(records)} tickers → {OUTPUT_JSON}")
+print(f"[✓] Done. {success} tickers written to {OUTPUT_JSON} ({failed} failed).")
