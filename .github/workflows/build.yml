@@ -12,14 +12,14 @@ jobs:
   build_publish:
     runs-on: ubuntu-latest
 
-    # expose FTP secrets as env so we can safely check them in `if:`
+    # expose secrets as env so steps (and `if:`) can read them safely
     env:
+      # Optional FTP deploy
       FTP_HOST: ${{ secrets.FTP_HOST }}
       FTP_USER: ${{ secrets.FTP_USER }}
       FTP_PASS: ${{ secrets.FTP_PASS }}
       FTP_ROOT: ${{ secrets.FTP_ROOT }}
-
-      # R2 secrets (read by the uploader step)
+      # R2 uploader
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -51,14 +51,15 @@ jobs:
           fi
           test -f tickers.csv && { echo "tickers.csv preview:"; head -5 tickers.csv; } || true
 
-      # === Build OHLC data (your existing process) ===
+      # === Build OHLC data ===
       - name: Build OHLC artifacts
         run: |
           set -e
-          python update_tickers.py
+          PYTHONWARNINGS=ignore python update_tickers.py
           echo "Built OHLC artifacts:"
           ls -lah data | sed 's/^/  /'
-          [ -f data/yesterday.json ] && jq -r '.[0] | keys | @csv' data/yesterday.json || true
+          # quick peek
+          head -n 3 data/latest_sp500.json || true
 
       # === Build names (ticker_meta.json) ===
       - name: Build ticker_meta.json (names via SEC; no FMP)
@@ -78,14 +79,11 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "build: update yesterday.json, latest.csv, ticker_meta.json"
+            git commit -m "build: update latest_sp500.json, ticker_meta.json"
             git push origin HEAD:${{ github.ref_name }}
           fi
 
       # === Publish to Cloudflare R2 (host-independent) ===
-      # upload_r2_tickers.py:
-      #  - writes per-ticker stubs to R2: ohlc/<SYMBOL>.json
-      #  - writes aggregate: ohlc/latest_sp500.json (array of rows for WP table)
       - name: Upload OHLC to R2
         run: |
           set -e
@@ -100,15 +98,13 @@ jobs:
           BASE="${FTP_ROOT%/}/wp-content/uploads/data"
           echo "Uploading to ftp://${FTP_HOST}${BASE}"
 
-          # Upload tickers.json (from yesterday.json)
-          if [ -f ./data/yesterday.json ]; then
+          if [ -f ./data/latest_sp500.json ]; then
             curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
-              -T ./data/yesterday.json \
+              -T ./data/latest_sp500.json \
               --user "${FTP_USER}:${FTP_PASS}" \
-              "ftp://${FTP_HOST}${BASE}/tickers.json"
+              "ftp://${FTP_HOST}${BASE}/latest_sp500.json"
           fi
 
-          # Upload names (ticker_meta.json)
           if [ -f ./data/ticker_meta.json ]; then
             curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
               -T ./data/ticker_meta.json \
@@ -116,4 +112,4 @@ jobs:
               "ftp://${FTP_HOST}${BASE}/ticker_meta.json"
           fi
 
-          echo "Deployed tickers.json and ticker_meta.json (if present)"
+          echo "Deployed latest_sp500.json and ticker_meta.json (if present)"
