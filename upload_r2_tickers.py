@@ -1,94 +1,69 @@
 #!/usr/bin/env python3
 """
-Upload OHLC JSON stubs to Cloudflare R2 and publish an aggregate latest file.
+Upload artifacts to Cloudflare R2.
 
-Usage (local):
-  python upload_r2_tickers.py --dry-run
+- Always uploads: data/latest_sp500.json  ->  ohlc/latest_sp500.json
+- Optional: upload per-ticker stubs from tickers.csv to ohlc/<TICKER>.json (disable with --no-stubs)
+
+Env (GitHub Actions -> Secrets):
+  R2_ACCOUNT_ID
+  R2_ENDPOINT_URL = https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+  R2_BUCKET = ohlc
+  R2_ACCESS_KEY_ID
+  R2_SECRET_ACCESS_KEY
+  R2_PUBLIC_BASE (optional)
+
+Usage:
   python upload_r2_tickers.py
-
-Environment (via .env locally, or GitHub Actions secrets):
-  R2_ACCOUNT_ID=...
-  R2_ACCESS_KEY_ID=...
-  R2_SECRET_ACCESS_KEY=...
-  R2_ENDPOINT_URL=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-  R2_BUCKET=ohlc
-  R2_PUBLIC_BASE=https://pub-<id>.r2.dev        (optional, for info logs)
+  python upload_r2_tickers.py --no-stubs
+  python upload_r2_tickers.py --dry-run
 """
 
 from __future__ import annotations
-import csv, io, json, os, sys, time
+import argparse, io, json, os, sys
 from pathlib import Path
-from typing import List, Dict
 
 import boto3
 from botocore.config import Config
-from dotenv import load_dotenv
 
+ROOT = Path(__file__).resolve().parent
+DATA = ROOT / "data"
+LATEST_JSON = DATA / "latest_sp500.json"
+TICKERS_TXT = ROOT / "tickers.txt"
 
-def env(name: str, required: bool = True) -> str:
-    v = os.getenv(name)
+def env(name: str, required=True, default=""):
+    v = os.getenv(name, default)
     if required and not v:
-        print(f"[ERROR] Missing required env var {name}", file=sys.stderr)
+        print(f"[ERROR] missing env: {name}", file=sys.stderr)
         sys.exit(1)
-    return v or ""
-
-
-def read_tickers(csv_path: Path) -> List[str]:
-    if not csv_path.exists():
-        print(f"[ERROR] tickers.csv not found at {csv_path.resolve()}", file=sys.stderr)
-        sys.exit(1)
-    syms: List[str] = []
-    with csv_path.open("r", newline="", encoding="utf-8") as f:
-        r = csv.reader(f)
-        for row in r:
-            if not row: continue
-            s = row[0].strip().upper()
-            if not s or s in {"TICKER","SYMBOL"}: continue
-            syms.append(s)
-    if not syms:
-        print("[WARN] tickers.csv was empty")
-    return syms
-
-
-def stub_row(sym: str) -> Dict[str, object]:
-    # Keys align with your WP table defaults
-    return {
-        "symbol": sym,
-        "name": None,
-        "open": None,
-        "high": None,
-        "low": None,
-        "close": None,
-        "volume": None,
-        "date": None
-    }
-
+    return v
 
 def main():
-    load_dotenv()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-stubs", action="store_true")
+    args = ap.parse_args()
 
-    # --- config
     account_id   = env("R2_ACCOUNT_ID")
     endpoint_url = env("R2_ENDPOINT_URL")
     bucket       = env("R2_BUCKET")
     access_key   = env("R2_ACCESS_KEY_ID")
     secret_key   = env("R2_SECRET_ACCESS_KEY")
-    public_base  = env("R2_PUBLIC_BASE", required=False)
-    dry_run      = ("--dry-run" in sys.argv)
+    public_base  = os.getenv("R2_PUBLIC_BASE", "")
 
     print("== R2 config =====================")
     print("ACCOUNT   :", account_id[:6] + "…")
     print("ENDPOINT  :", endpoint_url)
     print("BUCKET    :", bucket)
     print("PUBLIC    :", public_base or "(none)")
-    print("MODE      :", "DRY RUN" if dry_run else "UPLOAD")
+    print("MODE      :", "DRY RUN" if args.dry_run else "UPLOAD")
     print("==================================")
 
-    if "YOUR_ACCOUNT_ID" in endpoint_url:
-        print("[ERROR] R2_ENDPOINT_URL still has placeholder. Fix it.", file=sys.stderr)
+    if not LATEST_JSON.exists():
+        print(f"[ERROR] {LATEST_JSON} not found. Build step must run first.", file=sys.stderr)
         sys.exit(1)
 
-    # R2 client
+    # S3 client for R2
     s3 = boto3.client(
         "s3",
         endpoint_url=endpoint_url,
@@ -98,55 +73,49 @@ def main():
         config=Config(s3={"addressing_style": "virtual"})
     )
 
-    # --- input
-    tickers = read_tickers(Path("tickers.csv"))
-    if not tickers:
-        return
-
-    # --- per-ticker stubs
-    uploaded = 0
-    for sym in tickers:
-        key  = f"ohlc/{sym}.json"
-        body = json.dumps(stub_row(sym), separators=(",", ":"), ensure_ascii=False)
-
-        if dry_run:
-            url = f"{public_base.rstrip('/')}/{key}" if public_base else f"s3://{bucket}/{key}"
-            print(f"[DRY] would PUT {key} -> {url}")
-        else:
-            data = io.BytesIO(body.encode("utf-8"))
-            s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType="application/json")
-            uploaded += 1
-            if uploaded % 100 == 0:
-                print(f"Uploaded {uploaded}/{len(tickers)}...")
-
-    # --- aggregate latest_sp500.json (array of rows)
-    latest_rows = [stub_row(s) for s in tickers]
-    latest_body = json.dumps(latest_rows, separators=(",", ":"), ensure_ascii=False)
-    latest_key  = "ohlc/latest_sp500.json"
-
-    manifest = {
-        "generated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "count": len(tickers),
-        "files": ["ohlc/latest_sp500.json"],
-    }
-    manifest_body = json.dumps(manifest, separators=(",", ":"))
-
-    if dry_run:
-        print(f"[DRY] would PUT {latest_key} (rows={len(tickers)})")
-        print(f"[DRY] would PUT ohlc/manifest.json")
+    # --- Upload main aggregate file ---
+    latest_body = LATEST_JSON.read_bytes()
+    if args.dry_run:
+        print(f"[DRY] would PUT ohlc/latest_sp500.json ({len(latest_body)} bytes)")
     else:
-        s3.put_object(Bucket=bucket, Key=latest_key, Body=latest_body.encode("utf-8"),
-                      ContentType="application/json")
-        s3.put_object(Bucket=bucket, Key="ohlc/manifest.json",
-                      Body=manifest_body.encode("utf-8"),
-                      ContentType="application/json")
-        print(f"[+] Uploaded {uploaded} per-ticker stubs.")
-        print(f"[+] Uploaded {latest_key} with {len(tickers)} rows.")
-        if public_base:
-            print("Example:", f"{public_base.rstrip('/')}/{latest_key}")
+        s3.put_object(
+            Bucket=bucket,
+            Key="ohlc/latest_sp500.json",
+            Body=io.BytesIO(latest_body),
+            ContentType="application/json"
+        )
+        try:
+            arr = json.loads(latest_body)
+            print(f"[+] Uploaded ohlc/latest_sp500.json with {len(arr)} rows.")
+        except Exception:
+            print("[+] Uploaded ohlc/latest_sp500.json")
 
-    print("Done.")
+    # --- Optional: upload per-ticker stubs (symbol + nulls) ---
+    if not args.no_stubs and TICKERS_TXT.exists():
+        tickers = [t.strip() for t in TICKERS_TXT.read_text().splitlines() if t.strip()]
+        uploaded = 0
+        for sym in tickers:
+            stub = {
+                "symbol": sym,
+                "name": None, "open": None, "high": None, "low": None,
+                "close": None, "volume": None, "date": None
+            }
+            body = json.dumps(stub, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            key = f"ohlc/{sym}.json"
 
+            if args.dry_run:
+                print(f"[DRY] would PUT {key}")
+            else:
+                s3.put_object(Bucket=bucket, Key=key, Body=io.BytesIO(body), ContentType="application/json")
+                uploaded += 1
+                if uploaded % 100 == 0:
+                    print(f"  … {uploaded}/{len(tickers)} stubs")
+
+        if not args.dry_run:
+            print(f"[+] Uploaded {uploaded} per-ticker stubs.")
+
+    if public_base:
+        print("Example public URL:", f"{public_base.rstrip('/')}/ohlc/latest_sp500.json")
 
 if __name__ == "__main__":
     try:
