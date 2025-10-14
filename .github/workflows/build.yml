@@ -3,7 +3,7 @@ name: Build & Publish OHLC
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 2 * * *"   # daily at 02:15 UTC
+    - cron: '15 22 * * 1-5'   # weekdays 22:15 UTC (change/disable as you like)
 
 permissions:
   contents: write
@@ -12,21 +12,6 @@ jobs:
   build_publish:
     runs-on: ubuntu-latest
 
-    # expose secrets as env so steps (and `if:`) can read them safely
-    env:
-      # Optional FTP deploy
-      FTP_HOST: ${{ secrets.FTP_HOST }}
-      FTP_USER: ${{ secrets.FTP_USER }}
-      FTP_PASS: ${{ secrets.FTP_PASS }}
-      FTP_ROOT: ${{ secrets.FTP_ROOT }}
-      # R2 uploader
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
-      R2_BUCKET: ${{ secrets.R2_BUCKET }}
-      R2_PUBLIC_BASE: ${{ secrets.R2_PUBLIC_BASE }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,16 +19,15 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # If you only have tickers.txt, copy it to tickers.csv for the uploader
       - name: Ensure tickers.csv exists
         run: |
           if [ ! -f tickers.csv ] && [ -f tickers.txt ]; then
@@ -51,65 +35,52 @@ jobs:
           fi
           test -f tickers.csv && { echo "tickers.csv preview:"; head -5 tickers.csv; } || true
 
-      # === Build OHLC data ===
+      # === Build OHLC (fast batched) ===
       - name: Build OHLC artifacts
         run: |
           set -e
-          PYTHONWARNINGS=ignore python update_tickers.py
-          echo "Built OHLC artifacts:"
-          ls -lah data | sed 's/^/  /'
-          # quick peek
-          head -n 3 data/latest_sp500.json || true
+          python update_tickers.py
+          echo "Built data/latest_sp500.json:"
+          jq -r '.[0] | keys | @csv' data/latest_sp500.json || true
+          echo "Rows:" $(jq '. | length' data/latest_sp500.json)
 
-      # === Build names (ticker_meta.json) ===
-      - name: Build ticker_meta.json (names via SEC; no FMP)
+      # === Build names/sector/industry (yfinance metadata) ===
+      - name: Build ticker_meta.json (names + sector + industry)
         run: |
           set -e
           python scripts/build_ticker_meta.py
-          echo "Preview ticker_meta.json:"
-          head -n 40 data/ticker_meta.json || true
+          echo "ticker_meta head:"
+          head -n 20 data/ticker_meta.json || true
 
-      # Commit outputs back to repo (only if there are changes)
+      # Commit outputs if changed
       - name: Commit & push outputs
         run: |
           set -e
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/*.csv data/*.json data/raw/*.csv tickers.txt || true
+          git add -A data/*.json data/*.csv data/raw/*.csv || true
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "build: update latest_sp500.json, ticker_meta.json"
+            git commit -m "build: update latest_sp500.json + ticker_meta.json"
             git push origin HEAD:${{ github.ref_name }}
           fi
 
-      # === Publish to Cloudflare R2 (host-independent) ===
+      # === Upload to R2 (aggregate JSON only) ===
       - name: Upload OHLC to R2
+        env:
+          R2_ACCOUNT_ID:       ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ENDPOINT_URL:     ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET:           ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID:    ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY:${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE:      ${{ secrets.R2_PUBLIC_BASE }}
         run: |
           set -e
-          python upload_r2_tickers.py
+          python upload_r2_tickers.py --no-stubs
+          echo "Uploaded latest_sp500.json to R2."
 
-      # === Optional: keep old FTP deploy (runs only if FTP_* are set) ===
+      # === Legacy FTP step is disabled to avoid failures ===
       - name: Deploy tickers + meta via FTP (optional)
-        if: ${{ env.FTP_HOST != '' && env.FTP_USER != '' && env.FTP_PASS != '' && env.FTP_ROOT != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE="${FTP_ROOT%/}/wp-content/uploads/data"
-          echo "Uploading to ftp://${FTP_HOST}${BASE}"
-
-          if [ -f ./data/latest_sp500.json ]; then
-            curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
-              -T ./data/latest_sp500.json \
-              --user "${FTP_USER}:${FTP_PASS}" \
-              "ftp://${FTP_HOST}${BASE}/latest_sp500.json"
-          fi
-
-          if [ -f ./data/ticker_meta.json ]; then
-            curl --ftp-create-dirs --ftp-method nocwd --ftp-pasv \
-              -T ./data/ticker_meta.json \
-              --user "${FTP_USER}:${FTP_PASS}" \
-              "ftp://${FTP_HOST}${BASE}/ticker_meta.json"
-          fi
-
-          echo "Deployed latest_sp500.json and ticker_meta.json (if present)"
+        if: false
+        run: echo "FTP deploy skipped."
