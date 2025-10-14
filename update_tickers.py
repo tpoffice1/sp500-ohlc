@@ -1,48 +1,57 @@
-import re
-import sys
+"""
+update_tickers.py
+Fetches daily OHLC data for all S&P 500 tickers and writes latest_sp500.json.
+"""
+
 import pandas as pd
-import requests
-from io import StringIO
+import yfinance as yf
+import json
+import time
+from datetime import datetime, timedelta
+from pathlib import Path
 
-WIKI_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+# Paths
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+TICKERS_FILE = Path("tickers.txt")
+OUTPUT_JSON = DATA_DIR / "latest_sp500.json"
 
-def clean_ticker(t: str) -> str:
-    t = str(t).strip().upper()
-    t = re.sub(r"\s+", "", t)       # remove spaces
-    t = re.sub(r"\[.*?\]", "", t)   # drop footnote markers like [1]
-    return t
+# Load tickers
+with open(TICKERS_FILE) as f:
+    tickers = [t.strip() for t in f if t.strip()]
 
-def main(out_path: str = "tickers.txt"):
-    headers = {"User-Agent": "Mozilla/5.0 (GitHub Actions bot)"}
-    resp = requests.get(WIKI_URL, headers=headers, timeout=30)
-    resp.raise_for_status()
+print(f"[i] Loaded {len(tickers)} tickers")
 
-    tables = pd.read_html(StringIO(resp.text), flavor="lxml")
+# Fetch latest OHLC for each ticker
+records = []
+start = (datetime.utcnow() - timedelta(days=10)).strftime("%Y-%m-%d")
+end = datetime.utcnow().strftime("%Y-%m-%d")
 
-    target = None
-    for df in tables:
-        cols = [c.lower() for c in df.columns]
-        if any(c in ("symbol", "ticker", "ticker symbol") for c in cols):
-            target = df
-            break
-    if target is None:
-        print("Could not find constituents table", file=sys.stderr)
-        sys.exit(1)
+for i, ticker in enumerate(tickers, 1):
+    try:
+        df = yf.download(ticker, start=start, end=end, progress=False)
+        if df.empty:
+            print(f"[-] No data for {ticker}")
+            continue
+        last_row = df.iloc[-1]
+        records.append({
+            "symbol": ticker,
+            "name": None,
+            "open": round(float(last_row["Open"]), 2),
+            "high": round(float(last_row["High"]), 2),
+            "low": round(float(last_row["Low"]), 2),
+            "close": round(float(last_row["Close"]), 2),
+            "volume": int(last_row["Volume"]),
+            "date": str(df.index[-1].date())
+        })
+        if i % 25 == 0:
+            print(f"[+] Processed {i}/{len(tickers)} tickers")
+        time.sleep(0.5)  # throttle to avoid rate limit
+    except Exception as e:
+        print(f"[!] Error fetching {ticker}: {e}")
 
-    for cand in ("Symbol", "Ticker", "Ticker symbol"):
-        if cand in target.columns:
-            ticker_col = cand
-            break
+# Save to JSON
+with open(OUTPUT_JSON, "w") as f:
+    json.dump(records, f, indent=2)
 
-    tickers = [clean_ticker(x) for x in target[ticker_col].tolist()]
-    tickers = [t for t in tickers if t and t != "NAN"]
-    tickers = sorted(set(tickers))
-
-    with open(out_path, "w", encoding="utf-8") as f:
-        for t in tickers:
-            f.write(t + "\n")
-
-    print(f"Wrote {len(tickers)} tickers to {out_path}")
-
-if __name__ == "__main__":
-    main()
+print(f"[✓] Wrote {len(records)} tickers → {OUTPUT_JSON}")
