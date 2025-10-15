@@ -42,12 +42,12 @@ jobs:
       - name: Fetch OHLC
         run: |
           set -euo pipefail
-          python scripts/fetch_ohlc.py
+          python fetch_ohlc.py
 
       - name: Update tickers metadata
         run: |
           set -euo pipefail
-          python scripts/update_tickers.py
+          python update_tickers.py
 
       - name: Upload R2 tickers (optional)
         if: always()
@@ -60,7 +60,7 @@ jobs:
           R2_PUBLIC_BASE:       ${{ secrets.R2_PUBLIC_BASE }}
         run: |
           set -euo pipefail
-          python scripts/upload_r2_tickers.py
+          python upload_r2_tickers.py
 
       - name: Commit & push changes
         run: |
