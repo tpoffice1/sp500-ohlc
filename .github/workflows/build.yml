@@ -30,53 +30,38 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # --- Debug: show what's in the workspace so we can confirm paths ---
-      - name: Inspect workspace (debug)
+      - name: Ensure tickers.txt exists at repo root
         run: |
-          echo "pwd:" && pwd
-          echo "root listing:" && ls -la
-          echo "scripts listing:" && ls -la scripts || true
-          echo "tracked files:" && git ls-files | sort
+          if [ ! -f tickers.txt ] && [ -f scripts/tickers.txt ]; then
+            cp scripts/tickers.txt .
+            echo "Copied scripts/tickers.txt -> ./tickers.txt"
+          else
+            echo "tickers.txt already present or scripts/tickers.txt missing."
+          fi
 
-      # --- Run your build scripts (prefer scripts/; fall back to root) ---
       - name: Fetch OHLC
         run: |
           set -euo pipefail
-          if [ -f scripts/fetch_ohlc.py ]; then
-            python scripts/fetch_ohlc.py
-          elif [ -f fetch_ohlc.py ]; then
-            python fetch_ohlc.py
-          else
-            echo "fetch_ohlc.py not found in scripts/ or repo root."
-            exit 1
-          fi
+          python scripts/fetch_ohlc.py
 
       - name: Update tickers metadata
         run: |
           set -euo pipefail
-          if [ -f scripts/update_tickers.py ]; then
-            python scripts/update_tickers.py
-          elif [ -f update_tickers.py ]; then
-            python update_tickers.py
-          else
-            echo "update_tickers.py not found in scripts/ or repo root."
-            exit 1
-          fi
+          python scripts/update_tickers.py
 
       - name: Upload R2 tickers (optional)
         if: always()
+        env:
+          R2_ACCOUNT_ID:        ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET:            ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL:      ${{ secrets.R2_ENDPOINT_URL }}
+          R2_PUBLIC_BASE:       ${{ secrets.R2_PUBLIC_BASE }}
         run: |
           set -euo pipefail
-          if [ -f scripts/upload_r2_tickers.py ]; then
-            python scripts/upload_r2_tickers.py
-          elif [ -f upload_r2_tickers.py ]; then
-            python upload_r2_tickers.py
-          else
-            echo "upload_r2_tickers.py not found in scripts/ or repo root."
-            exit 1
-          fi
+          python scripts/upload_r2_tickers.py
 
-      # --- Commit any changed files back to main (only if there are changes) ---
       - name: Commit & push changes
         run: |
           set -euo pipefail
