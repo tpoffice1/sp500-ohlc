@@ -30,59 +30,46 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # --- Make *certain* the runner sees the files we think it does ---
-      - name: Verify workspace (pre-build)
-        working-directory: ${{ github.workspace }}
+      - name: Verify workspace
         run: |
-          echo "PWD:"
-          pwd
-          echo "Root listing:"
+          echo "PWD: $(pwd)"
           ls -la
-          echo "Git tracked files (excerpt):"
-          git ls-files | sort | sed -n '1,120p'
-          echo "Presence checks:"
-          test -f tickers.txt && echo "tickers.txt PRESENT" || echo "tickers.txt MISSING"
-          test -f fetch_ohlc.py && echo "fetch_ohlc.py PRESENT" || echo "fetch_ohlc.py MISSING"
-          test -f update_tickers.py && echo "update_tickers.py PRESENT" || echo "update_tickers.py MISSING"
-          echo "tickers.txt head (up to 10 lines):"
-          (head -n 10 tickers.txt 2>/dev/null || true)
+          echo "tickers.txt head:"
+          head -n 5 tickers.txt || echo "tickers.txt missing!"
 
-      # If someone accidentally removed tickers.txt locally later, this keeps us safe.
-      - name: Ensure tickers.txt exists at repo root
-        working-directory: ${{ github.workspace }}
+      - name: Ensure tickers.txt exists
         run: |
           if [ ! -f tickers.txt ] && [ -f scripts/tickers.txt ]; then
             cp scripts/tickers.txt .
             echo "Copied scripts/tickers.txt -> ./tickers.txt"
-          else
-            echo "tickers.txt already present OR scripts/tickers.txt missing (no copy)."
           fi
 
       - name: Fetch OHLC
-        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
           python fetch_ohlc.py
 
-      # Double-check again *right before* the failing step
-      - name: Verify workspace (pre-update_tickers)
-        working-directory: ${{ github.workspace }}
-        run: |
-          echo "PWD:"
-          pwd
-          echo "Root listing:"
-          ls -la
-          echo "Presence checks:"
-          test -f tickers.txt && echo "tickers.txt PRESENT" || echo "tickers.txt MISSING"
-          test -f update_tickers.py && echo "update_tickers.py PRESENT" || echo "update_tickers.py MISSING"
-          echo "tickers.txt head (up to 10 lines):"
-          (head -n 10 tickers.txt 2>/dev/null || true)
-
       - name: Update tickers metadata
-        working-directory: ${{ github.workspace }}
+        env:
+          TICKERS_PATH: ${{ github.workspace }}/tickers.txt
         run: |
           set -euo pipefail
-          python update_tickers.py
+          echo "Forcing path for tickers.txt: $TICKERS_PATH"
+          python - <<'PYCODE'
+import os, pathlib, update_tickers
+from pathlib import Path
+
+tickers_file = Path(os.environ["TICKERS_PATH"])
+print(f"✅ Using forced tickers path: {tickers_file.resolve()}")
+
+# Patch update_tickers.TICKERS_TXT before calling main()
+if hasattr(update_tickers, "TICKERS_TXT"):
+    update_tickers.TICKERS_TXT = tickers_file
+else:
+    update_tickers.TICKERS_TXT = tickers_file
+
+update_tickers.main()
+PYCODE
 
       - name: Upload R2 tickers (optional)
         if: always()
@@ -93,13 +80,11 @@ jobs:
           R2_BUCKET:            ${{ secrets.R2_BUCKET }}
           R2_ENDPOINT_URL:      ${{ secrets.R2_ENDPOINT_URL }}
           R2_PUBLIC_BASE:       ${{ secrets.R2_PUBLIC_BASE }}
-        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
           python upload_r2_tickers.py
 
       - name: Commit & push changes
-        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
