@@ -30,60 +30,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ensure tickers.csv exists
+      # --- Build steps (adjust only the script names/paths if yours differ) ---
+      - name: Fetch OHLC
         run: |
-          if [ ! -f tickers.csv ] && [ -f tickers.txt ]; then
-            cp tickers.txt tickers.csv
-          fi
-          test -f tickers.csv && { echo "tickers.csv preview:"; head -5 tickers.csv; } || true
+          set -euo pipefail
+          python scripts/fetch_ohlc.py
 
-      # === Build OHLC (fast batched) ===
-      - name: Build OHLC artifacts
+      - name: Update tickers metadata
         run: |
-          set -e
-          python update_tickers.py
-          echo "Built data/latest_sp500.json:"
-          jq -r '.[0] | keys | @csv' data/latest_sp500.json || true
-          echo "Rows:" $(jq '. | length' data/latest_sp500.json)
+          set -euo pipefail
+          python scripts/update_tickers.py
 
-      # === Build names/sector/industry (yfinance metadata) ===
-      - name: Build ticker_meta.json (names + sector + industry)
+      - name: Upload R2 tickers (optional)
+        if: always()  # keep if you want it to run even if previous step fails
         run: |
-          set -e
-          python scripts/build_ticker_meta.py
-          echo "ticker_meta head:"
-          head -n 20 data/ticker_meta.json || true
+          set -euo pipefail
+          python scripts/upload_r2_tickers.py
 
-      # Commit outputs if changed
-      - name: Commit & push outputs
+      # --- Commit any changed files back to main (only if there are changes) ---
+      - name: Commit & push changes
         run: |
-          set -e
+          set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/*.json data/*.csv data/raw/*.csv || true
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "CI: update OHLC $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            git push
           else
-            git commit -m "build: update latest_sp500.json + ticker_meta.json"
-            git push origin HEAD:${{ github.ref_name }}
+            echo "No changes to commit."
           fi
-
-      # === Upload to R2 (aggregate JSON only) ===
-      - name: Upload OHLC to R2
-        env:
-          R2_ACCOUNT_ID:       ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ENDPOINT_URL:     ${{ secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET:           ${{ secrets.R2_BUCKET }}
-          R2_ACCESS_KEY_ID:    ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY:${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_PUBLIC_BASE:      ${{ secrets.R2_PUBLIC_BASE }}
-        run: |
-          set -e
-          python upload_r2_tickers.py --no-stubs
-          echo "Uploaded latest_sp500.json to R2."
-
-      # === Legacy FTP step is disabled to avoid failures ===
-      - name: Deploy tickers + meta via FTP (optional)
-        if: false
-        run: echo "FTP deploy skipped."
-
