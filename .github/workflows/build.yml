@@ -53,32 +53,31 @@ jobs:
           set -euo pipefail
           python fetch_ohlc.py
 
-      # --- Force update_tickers.py to use an absolute tickers path via a tiny wrapper file ---
-      - name: Update tickers metadata (forced tickers path)
+      - name: Update tickers metadata (forced tickers path via wrapper)
         env:
           TICKERS_PATH: ${{ github.workspace }}/tickers.txt
         run: |
           set -euo pipefail
           echo "Using TICKERS_PATH=${TICKERS_PATH}"
-          cat > update_tickers_wrapper.py <<'PY'
-import os, importlib.util, runpy
-from pathlib import Path
-
-tickers_file = Path(os.environ["TICKERS_PATH"]).resolve()
-print(f"✅ Forced tickers path: {tickers_file}")
-
-spec = importlib.util.spec_from_file_location("update_tickers", "update_tickers.py")
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
-
-if hasattr(mod, "TICKERS_TXT"):
-    mod.TICKERS_TXT = tickers_file
-
-if hasattr(mod, "main"):
-    mod.main()
-else:
-    runpy.run_path("update_tickers.py", run_name="__main__")
-PY
+          printf '%s\n' \
+            'import os, importlib.util, runpy' \
+            'from pathlib import Path' \
+            '' \
+            'tickers_file = Path(os.environ["TICKERS_PATH"]).resolve()' \
+            'print(f"✅ Forced tickers path: {tickers_file}")' \
+            '' \
+            'spec = importlib.util.spec_from_file_location("update_tickers", "update_tickers.py")' \
+            'mod = importlib.util.module_from_spec(spec)' \
+            'spec.loader.exec_module(mod)' \
+            '' \
+            'if hasattr(mod, "TICKERS_TXT"):' \
+            '    mod.TICKERS_TXT = tickers_file' \
+            '' \
+            'if hasattr(mod, "main"): ' \
+            '    mod.main()' \
+            'else:' \
+            '    runpy.run_path("update_tickers.py", run_name="__main__")' \
+          > update_tickers_wrapper.py
           python update_tickers_wrapper.py
 
       - name: Upload R2 tickers (optional)
