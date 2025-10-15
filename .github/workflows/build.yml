@@ -30,11 +30,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Quick sanity check
+      - name: Sanity check workspace
         run: |
           echo "PWD: $(pwd)"
           ls -la
-          echo "--- presence ---"
           [ -f fetch_ohlc.py ] && echo "fetch_ohlc.py OK" || echo "fetch_ohlc.py MISSING"
           [ -f update_tickers.py ] && echo "update_tickers.py OK" || echo "update_tickers.py MISSING"
           [ -f upload_r2_tickers.py ] && echo "upload_r2_tickers.py OK" || echo "upload_r2_tickers.py MISSING"
@@ -54,37 +53,33 @@ jobs:
           set -euo pipefail
           python fetch_ohlc.py
 
-      - name: Update tickers metadata (force absolute tickers path)
+      # --- Force update_tickers.py to use an absolute tickers path via a tiny wrapper file ---
+      - name: Update tickers metadata (forced tickers path)
         env:
           TICKERS_PATH: ${{ github.workspace }}/tickers.txt
         run: |
           set -euo pipefail
-          python - <<'PYCODE'
-import os, pathlib
+          echo "Using TICKERS_PATH=${TICKERS_PATH}"
+          cat > update_tickers_wrapper.py <<'PY'
+import os, importlib.util, runpy
 from pathlib import Path
-import importlib.util, runpy
 
 tickers_file = Path(os.environ["TICKERS_PATH"]).resolve()
-print(f"✅ Using forced tickers path: {tickers_file}")
+print(f"✅ Forced tickers path: {tickers_file}")
 
 spec = importlib.util.spec_from_file_location("update_tickers", "update_tickers.py")
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
-# Patch module-level constant if present, then call main()
 if hasattr(mod, "TICKERS_TXT"):
     mod.TICKERS_TXT = tickers_file
-else:
-    # Some older versions might read a local Path directly inside a function;
-    # in that case, expose a global they can read if coded to do so.
-    setattr(mod, "TICKERS_TXT", tickers_file)
 
 if hasattr(mod, "main"):
     mod.main()
 else:
-    # Fallback if script is meant to be executed directly
     runpy.run_path("update_tickers.py", run_name="__main__")
-PYCODE
+PY
+          python update_tickers_wrapper.py
 
       - name: Upload R2 tickers (optional)
         if: always()
