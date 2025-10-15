@@ -1,86 +1,63 @@
-name: Build & Publish OHLC
+#!/usr/bin/env python3
+"""
+Builds data/ticker_meta.json with: symbol, name, sector, industry, description.
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '15 22 * * 1-5'   # weekdays 22:15 UTC (change/disable as you like)
+Uses yfinance per-symbol lookups with sensible timeouts and fallbacks. This is
+run in GitHub Actions, so be defensive but simple.
+"""
+from __future__ import annotations
+import json
+import time
+from pathlib import Path
 
-permissions:
-  contents: write
+import yfinance as yf
 
-jobs:
-  build_publish:
-    runs-on: ubuntu-latest
+ROOT = Path(__file__).resolve().parents[1]
+DATA = ROOT / "data"
+DATA.mkdir(exist_ok=True)
+TICKERS_TXT = ROOT / "tickers.txt"
+OUT = DATA / "ticker_meta.json"
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+def load_tickers() -> list[str]:
+    return [t.strip().upper() for t in TICKERS_TXT.read_text().splitlines() if t.strip()]
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+def get_meta(sym: str) -> dict:
+    """
+    Try to fetch longName / sector / industry / longBusinessSummary.
+    yfinance may return None or raise; keep it resilient.
+    """
+    name = sector = industry = desc = None
+    try:
+        t = yf.Ticker(sym)
+        # .info can be slow but still the most complete for profile fields.
+        info = t.info or {}
+        name = info.get("longName") or info.get("shortName")
+        sector = info.get("sector")
+        industry = info.get("industry")
+        desc = info.get("longBusinessSummary")
+    except Exception:
+        pass
+    return {
+        "symbol": sym,
+        "name": name,
+        "sector": sector,
+        "industry": industry,
+        "description": desc,
+    }
 
-      - name: Install Python deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+def main():
+    tickers = load_tickers()
+    out: list[dict] = []
+    for i, sym in enumerate(tickers, 1):
+        m = get_meta(sym)
+        out.append(m)
+        if i % 25 == 0:
+            print(f"[meta] fetched {i}/{len(tickers)} …")
+            # be a good citizen
+            time.sleep(0.5)
 
-      - name: Ensure tickers.csv exists
-        run: |
-          if [ ! -f tickers.csv ] && [ -f tickers.txt ]; then
-            cp tickers.txt tickers.csv
-          fi
-          test -f tickers.csv && { echo "tickers.csv preview:"; head -5 tickers.csv; } || true
+    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    print(f"[✓] wrote {OUT} with {len(out)} rows")
 
-      # === Build OHLC (fast batched) ===
-      - name: Build OHLC artifacts
-        run: |
-          set -e
-          python update_tickers.py
-          echo "Built data/latest_sp500.json:"
-          jq -r '.[0] | keys | @csv' data/latest_sp500.json || true
-          echo "Rows:" $(jq '. | length' data/latest_sp500.json)
-
-      # === Build names/sector/industry (yfinance metadata) ===
-      - name: Build ticker_meta.json (names + sector + industry)
-        run: |
-          set -e
-          python scripts/build_ticker_meta.py
-          echo "ticker_meta head:"
-          head -n 20 data/ticker_meta.json || true
-
-      # Commit outputs if changed
-      - name: Commit & push outputs
-        run: |
-          set -e
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/*.json data/*.csv data/raw/*.csv || true
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "build: update latest_sp500.json + ticker_meta.json"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
-
-      # === Upload to R2 (aggregate JSON only) ===
-      - name: Upload OHLC to R2
-        env:
-          R2_ACCOUNT_ID:       ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ENDPOINT_URL:     ${{ secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET:           ${{ secrets.R2_BUCKET }}
-          R2_ACCESS_KEY_ID:    ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY:${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_PUBLIC_BASE:      ${{ secrets.R2_PUBLIC_BASE }}
-        run: |
-          set -e
-          python upload_r2_tickers.py --no-stubs
-          echo "Uploaded latest_sp500.json to R2."
-
-      # === Legacy FTP step is disabled to avoid failures ===
-      - name: Deploy tickers + meta via FTP (optional)
-        if: false
-        run: echo "FTP deploy skipped."
+if __name__ == "__main__":
+    main()
