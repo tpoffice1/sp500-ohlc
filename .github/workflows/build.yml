@@ -30,18 +30,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Verify workspace
+      - name: Quick sanity check
         run: |
           echo "PWD: $(pwd)"
           ls -la
-          echo "tickers.txt head:"
-          head -n 5 tickers.txt || echo "tickers.txt missing!"
+          echo "--- presence ---"
+          [ -f fetch_ohlc.py ] && echo "fetch_ohlc.py OK" || echo "fetch_ohlc.py MISSING"
+          [ -f update_tickers.py ] && echo "update_tickers.py OK" || echo "update_tickers.py MISSING"
+          [ -f upload_r2_tickers.py ] && echo "upload_r2_tickers.py OK" || echo "upload_r2_tickers.py MISSING"
+          [ -f tickers.txt ] && echo "tickers.txt OK" || echo "tickers.txt MISSING"
 
-      - name: Ensure tickers.txt exists
+      - name: Ensure tickers.txt exists at repo root
         run: |
           if [ ! -f tickers.txt ] && [ -f scripts/tickers.txt ]; then
             cp scripts/tickers.txt .
             echo "Copied scripts/tickers.txt -> ./tickers.txt"
+          else
+            echo "tickers.txt already present OR scripts/tickers.txt missing (no copy)."
           fi
 
       - name: Fetch OHLC
@@ -49,26 +54,36 @@ jobs:
           set -euo pipefail
           python fetch_ohlc.py
 
-      - name: Update tickers metadata
+      - name: Update tickers metadata (force absolute tickers path)
         env:
           TICKERS_PATH: ${{ github.workspace }}/tickers.txt
         run: |
           set -euo pipefail
-          echo "Forcing path for tickers.txt: $TICKERS_PATH"
           python - <<'PYCODE'
-import os, pathlib, update_tickers
+import os, pathlib
 from pathlib import Path
+import importlib.util, runpy
 
-tickers_file = Path(os.environ["TICKERS_PATH"])
-print(f"✅ Using forced tickers path: {tickers_file.resolve()}")
+tickers_file = Path(os.environ["TICKERS_PATH"]).resolve()
+print(f"✅ Using forced tickers path: {tickers_file}")
 
-# Patch update_tickers.TICKERS_TXT before calling main()
-if hasattr(update_tickers, "TICKERS_TXT"):
-    update_tickers.TICKERS_TXT = tickers_file
+spec = importlib.util.spec_from_file_location("update_tickers", "update_tickers.py")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+# Patch module-level constant if present, then call main()
+if hasattr(mod, "TICKERS_TXT"):
+    mod.TICKERS_TXT = tickers_file
 else:
-    update_tickers.TICKERS_TXT = tickers_file
+    # Some older versions might read a local Path directly inside a function;
+    # in that case, expose a global they can read if coded to do so.
+    setattr(mod, "TICKERS_TXT", tickers_file)
 
-update_tickers.main()
+if hasattr(mod, "main"):
+    mod.main()
+else:
+    # Fallback if script is meant to be executed directly
+    runpy.run_path("update_tickers.py", run_name="__main__")
 PYCODE
 
       - name: Upload R2 tickers (optional)
@@ -84,7 +99,7 @@ PYCODE
           set -euo pipefail
           python upload_r2_tickers.py
 
-      - name: Commit & push changes
+      - name: Commit & push changes (if any)
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
